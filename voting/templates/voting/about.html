@@ -1,0 +1,372 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<!-- Alpine.js component for counters and interactive elements -->
+<div x-data="aboutPage()" x-init="init()">
+    <!-- Hero Section -->
+    <div class="text-center mb-5 animate__animated animate__fadeInDown">
+        <h1 class="display-4 text-primary fw-bold">About MMUST Voting System</h1>
+        <p class="lead">Empowering Democracy Through Technology</p>
+    </div>
+
+    <!-- Mission & Vision Row (animated cards) -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-6 animate__animated animate__fadeInLeft">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body text-center p-4">
+                    <i class="fas fa-bullseye fa-3x text-primary mb-3"></i>
+                    <h3>Our Mission</h3>
+                    <p class="card-text">To provide a secure, transparent, and accessible online voting platform that upholds the integrity of democratic processes at Masinde Muliro University of Science and Technology.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 animate__animated animate__fadeInRight">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body text-center p-4">
+                    <i class="fas fa-eye fa-3x text-primary mb-3"></i>
+                    <h3>Our Vision</h3>
+                    <p class="card-text">To become the benchmark for digital voting in Kenyan higher education institutions, fostering a culture of participation and trust.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Animated Counters (Alpine.js) – now fetching real data -->
+    <div class="row g-4 mb-5 text-center">
+        <div class="col-md-3 col-6">
+            <div class="card bg-primary text-white shadow-sm">
+                <div class="card-body py-4">
+                    <i class="fas fa-users fa-2x mb-2"></i>
+                    <h2 class="display-5 fw-bold" x-text="counters.students">0</h2>
+                    <p class="mb-0">Registered Voters</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card bg-success text-white shadow-sm">
+                <div class="card-body py-4">
+                    <i class="fas fa-vote-yea fa-2x mb-2"></i>
+                    <h2 class="display-5 fw-bold" x-text="counters.elections">0</h2>
+                    <p class="mb-0">Elections Held</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card bg-info text-white shadow-sm">
+                <div class="card-body py-4">
+                    <i class="fas fa-chart-line fa-2x mb-2"></i>
+                    <h2 class="display-5 fw-bold" x-text="counters.turnout">0</h2>
+                    <p class="mb-0">Average Turnout (%)</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card bg-warning text-dark shadow-sm">
+                <div class="card-body py-4">
+                    <i class="fas fa-shield-alt fa-2x mb-2"></i>
+                    <h2 class="display-5 fw-bold" x-text="counters.security">0</h2>
+                    <p class="mb-0">Security Incidents Blocked</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Features (grid with hover animations) -->
+    <div class="mb-5">
+        <h2 class="text-center mb-4">Key Features</h2>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4 animate__animated animate__zoomIn" style="animation-delay: 0.1s">
+                <div class="card h-100 shadow-sm feature-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-id-card fa-3x text-primary mb-3"></i>
+                        <h5>Secure Registration</h5>
+                        <p class="card-text">Voter registration with ID upload, face capture, and security questions. Admin verification ensures only eligible voters participate.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4 animate__animated animate__zoomIn" style="animation-delay: 0.2s">
+                <div class="card h-100 shadow-sm feature-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-lock fa-3x text-primary mb-3"></i>
+                        <h5>End‑to‑End Encryption</h5>
+                        <p class="card-text">Votes are encrypted on your device using RSA-2048 before transmission, ensuring that only the final tally is decrypted.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4 animate__animated animate__zoomIn" style="animation-delay: 0.3s">
+                <div class="card h-100 shadow-sm feature-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-chart-simple fa-3x text-primary mb-3"></i>
+                        <h5>Real‑Time Analytics</h5>
+                        <p class="card-text">Live turnout updates, heat maps of voter locations, and replay of vote flow provide unprecedented transparency.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4 animate__animated animate__zoomIn" style="animation-delay: 0.4s">
+                <div class="card h-100 shadow-sm feature-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-qrcode fa-3x text-primary mb-3"></i>
+                        <h5>Voter Receipt</h5>
+                        <p class="card-text">Each vote generates a unique receipt ID and QR code, allowing voters to verify their vote was counted without revealing their choice.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4 animate__animated animate__zoomIn" style="animation-delay: 0.5s">
+                <div class="card h-100 shadow-sm feature-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-robot fa-3x text-primary mb-3"></i>
+                        <h5>AI‑Powered Security</h5>
+                        <p class="card-text">Anomaly detection identifies suspicious patterns (e.g., rapid votes, IP concentration) and logs them for admin review.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4 animate__animated animate__zoomIn" style="animation-delay: 0.6s">
+                <div class="card h-100 shadow-sm feature-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-chalkboard-user fa-3x text-primary mb-3"></i>
+                        <h5>Leader Accountability</h5>
+                        <p class="card-text">After elections, voters can rate leaders based on their manifesto promises, and leaders receive feedback via a dedicated dashboard.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline of System Evolution -->
+    <div class="mb-5">
+        <h2 class="text-center mb-4">Our Journey</h2>
+        <div class="timeline">
+            <div class="timeline-item left animate__animated animate__fadeInLeft">
+                <div class="timeline-content">
+                    <h5>2024 – Conceptualization</h5>
+                    <p>Idea born to digitize student elections at MMUST, focusing on security and transparency.</p>
+                </div>
+            </div>
+            <div class="timeline-item right animate__animated animate__fadeInRight">
+                <div class="timeline-content">
+                    <h5>2025 – Pilot Launch</h5>
+                    <p>First pilot run for School of Computing elections with 500+ voters and zero security incidents.</p>
+                </div>
+            </div>
+            <div class="timeline-item left animate__animated animate__fadeInLeft">
+                <div class="timeline-content">
+                    <h5>2026 – Full Deployment</h5>
+                    <p>University‑wide rollout with real‑time analytics, live maps, and AI‑powered security features.</p>
+                </div>
+            </div>
+            <div class="timeline-item right animate__animated animate__fadeInRight">
+                <div class="timeline-content">
+                    <h5>Future – Continuous Improvement</h5>
+                    <p>Expanding to staff elections, integrating with national ID systems, and adopting post‑quantum cryptography.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Section (updated with the names you provided) -->
+    <div class="mb-5">
+        <h2 class="text-center mb-4">Meet the Team</h2>
+        <div class="row g-4">
+            <div class="col-md-3 col-6 text-center">
+                <div class="card border-0 bg-transparent">
+                    <div class="card-body">
+                        <i class="fas fa-user-circle fa-4x text-primary mb-2"></i>
+                        <h6>Lorine Atieno</h6>
+                        <p class="small">Project Lead</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6 text-center">
+                <div class="card border-0 bg-transparent">
+                    <div class="card-body">
+                        <i class="fas fa-user-circle fa-4x text-primary mb-2"></i>
+                        <h6>Festus Onwong'a</h6>
+                        <p class="small">Security Architect</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6 text-center">
+                <div class="card border-0 bg-transparent">
+                    <div class="card-body">
+                        <i class="fas fa-user-circle fa-4x text-primary mb-2"></i>
+                        <h6>Emmanuel Mose</h6>
+                        <p class="small">Front‑end Developer</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6 text-center">
+                <div class="card border-0 bg-transparent">
+                    <div class="card-body">
+                        <i class="fas fa-user-circle fa-4x text-primary mb-2"></i>
+                        <h6>Austine Ochieng</h6>
+                        <p class="small">Back‑end Developer</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6 text-center offset-md-2">
+                <div class="card border-0 bg-transparent">
+                    <div class="card-body">
+                        <i class="fas fa-user-circle fa-4x text-primary mb-2"></i>
+                        <h6>Emmanuel Omondi</h6>
+                        <p class="small">Documentation</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call to Action (improved contrast) -->
+    <div class="text-center bg-light p-5 rounded-3 shadow-sm mb-5">
+        <h3 class="fw-bold">Ready to experience the future of voting?</h3>
+        <p class="lead mb-4">Join thousands of MMUST students and staff who have already used our system.</p>
+        <a href="{% url 'register' %}" class="btn btn-primary btn-lg btn-glow mt-2">Register Now</a>
+        <a href="{% url 'contact' %}" class="btn btn-outline-secondary btn-lg ms-2 mt-2">Contact Us</a>
+    </div>
+</div>
+
+<!-- Inline CSS for timeline, feature cards, and counters -->
+<style>
+    /* Ensure all card text has proper contrast */
+    .card, .timeline-content {
+        color: var(--text-color);
+        background-color: var(--card-bg);
+    }
+    .card-text, .timeline-content p {
+        color: var(--text-color);
+        opacity: 0.9;
+    }
+    .bg-light {
+        background-color: var(--card-bg) !important;
+        color: var(--text-color);
+    }
+    /* Feature Card Hover Effect */
+    .feature-card {
+        transition: all 0.3s ease;
+    }
+    .feature-card:hover {
+        transform: translateY(-8px);
+        box-shadow: var(--hover-shadow);
+    }
+
+    /* Timeline Styles */
+    .timeline {
+        position: relative;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px 0;
+    }
+    .timeline::after {
+        content: '';
+        position: absolute;
+        width: 4px;
+        background: var(--primary-btn);
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        margin-left: -2px;
+        border-radius: 2px;
+    }
+    .timeline-item {
+        padding: 10px 40px;
+        position: relative;
+        width: 50%;
+        box-sizing: border-box;
+    }
+    .timeline-item.left {
+        left: 0;
+    }
+    .timeline-item.right {
+        left: 50%;
+    }
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        background: var(--primary-btn);
+        border-radius: 50%;
+        top: 15px;
+        z-index: 1;
+    }
+    .timeline-item.left::before {
+        right: -10px;
+    }
+    .timeline-item.right::before {
+        left: -10px;
+    }
+    .timeline-content {
+        padding: 20px;
+        background: var(--card-bg);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border-color);
+    }
+    @media (max-width: 768px) {
+        .timeline::after {
+            left: 31px;
+        }
+        .timeline-item {
+            width: 100%;
+            padding-left: 70px;
+            padding-right: 25px;
+        }
+        .timeline-item.right {
+            left: 0;
+        }
+        .timeline-item.left::before,
+        .timeline-item.right::before {
+            left: 21px;
+        }
+    }
+</style>
+
+<!-- Alpine.js Component with dynamic fetch -->
+<script>
+    function aboutPage() {
+        return {
+            counters: {
+                students: 0,
+                elections: 0,
+                turnout: 0,
+                security: 0
+            },
+            init() {
+                // Fetch real statistics from the backend
+                fetch('/api/stats/')
+                    .then(response => response.json())
+                    .then(data => {
+                        this.animateCounter('students', data.registered_voters, 2000);
+                        this.animateCounter('elections', data.elections_held, 1500);
+                        this.animateCounter('turnout', data.avg_turnout, 1800);
+                        this.animateCounter('security', data.security_incidents, 2200);
+                    })
+                    .catch(error => {
+                        console.error('Failed to fetch stats:', error);
+                        // Fallback to zeros (no animation)
+                        this.counters = { students: 0, elections: 0, turnout: 0, security: 0 };
+                    });
+            },
+            animateCounter(key, target, duration) {
+                let start = 0;
+                let stepTime = 20; // ms
+                let steps = duration / stepTime;
+                let increment = target / steps;
+                let current = 0;
+                const interval = setInterval(() => {
+                    current += increment;
+                    if (current >= target) {
+                        this.counters[key] = target;
+                        clearInterval(interval);
+                    } else {
+                        this.counters[key] = Math.floor(current);
+                    }
+                }, stepTime);
+            }
+        }
+    }
+</script>
+
+<!-- Animate.css CDN (if not already included) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+{% endblock %}

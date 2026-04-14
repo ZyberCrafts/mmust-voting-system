@@ -1,0 +1,275 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div x-data="candidateForm()" x-init="init()" class="row justify-content-center">
+    <div class="col-md-8 col-lg-7">
+        <div class="card shadow animate__animated animate__fadeInUp">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">Register as Candidate</h3>
+                <i class="fas fa-user-check fa-2x"></i>
+            </div>
+            <div class="card-body">
+                <form method="post" @submit.prevent="validateAndSubmit" id="candidateForm" enctype="multipart/form-data">
+                    {% csrf_token %}
+
+                    <!-- Step 1: Gender Selection -->
+                    <div class="mb-4" :class="{ 'has-error': errors.gender }">
+                        <label class="form-label fw-bold">Your Gender *</label>
+                        <select name="gender" class="form-select" x-model="formData.gender" @change="onGenderChange" required>
+                            <option value="">-- Select Gender --</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                        <div class="invalid-feedback" x-show="errors.gender" x-text="errors.gender"></div>
+                        <small class="text-muted">This determines which positions you can contest for.</small>
+                    </div>
+
+                    <!-- Step 2: Position (filtered by gender) -->
+                    <div class="mb-4" :class="{ 'has-error': errors.position }" x-show="showPosition">
+                        <label class="form-label fw-bold">Position *</label>
+                        <select name="position" class="form-select" x-model="formData.position" @change="onPositionChange" :required="showPosition">
+                            <option value="">-- Select Position --</option>
+                            <template x-for="pos in filteredPositions" :key="pos.id">
+                                <option :value="pos.id" x-text="pos.name"></option>
+                            </template>
+                        </select>
+                        <div class="invalid-feedback" x-show="errors.position" x-text="errors.position"></div>
+                        <small class="text-muted">Select the position you are contesting for.</small>
+                    </div>
+
+                    <!-- Party Field (for President) -->
+                        <div class="mb-4" x-show="selectedPositionType === 'president'">
+                            <label class="form-label fw-bold">Party *</label>
+                            <select name="party" class="form-select" x-model="formData.party" @change="updatePartyPreview">
+                                <option value="">-- Select Party --</option>
+                                <template x-for="party in parties" :key="party.id">
+                                    <option :value="party.id">
+                                        <span x-text="party.name"></span>
+                                        <span x-show="party.slogan" x-text="` (${party.slogan})`"></span>
+                                        <span x-show="party.term" x-text="` - ${party.term}`"></span>
+                                    </option>
+                                </template>
+                            </select>
+                            <div class="mt-2" x-show="selectedParty">
+                                <img :src="selectedParty.logo" class="img-thumbnail" style="max-width: 80px;" x-show="selectedParty.logo">
+                                <p class="small mt-1" x-text="selectedParty.slogan" x-show="selectedParty.slogan"></p>
+                                <p class="small text-muted" x-text="selectedParty.term" x-show="selectedParty.term"></p>
+                            </div>
+                        </div>
+
+                    <!-- Party Nomination Certificate (for President) -->
+                    <div class="mb-3" x-show="selectedPositionType === 'president'">
+                        <label class="form-label fw-bold">Party Nomination Certificate *</label>
+                        <input type="file" name="party_certificate" class="form-control" accept=".pdf,.jpg,.png" :required="selectedPositionType === 'president'">
+                        <small class="text-muted">Upload signed nomination letter from your party leader.</small>
+                    </div>
+
+                    <!-- Hall Field (for Hall Representative) -->
+                    <div class="mb-4" x-show="selectedPositionType === 'hall'">
+                        <label class="form-label fw-bold">Select Hall *</label>
+                        <select name="hall" class="form-select" x-model="formData.hall">
+                            <option value="">-- Select Hall --</option>
+                            <option value="hall1_male" x-show="formData.gender === 'male'">Hall 1 (Male)</option>
+                            <option value="hall2_male" x-show="formData.gender === 'male'">Hall 2 (Male)</option>
+                            <option value="hall3_female" x-show="formData.gender === 'female'">Hall 3 (Female)</option>
+                            <option value="hall4_female" x-show="formData.gender === 'female'">Hall 4 (Female)</option>
+                            <option value="hall4_male" x-show="formData.gender === 'male'">Hall 4 (Male)</option>
+                        </select>
+                    </div>
+
+                    <!-- School Field (for School Representative) -->
+                    <div class="mb-4" x-show="selectedPositionType === 'school'">
+                        <label class="form-label fw-bold">Select School *</label>
+                        <select name="school" class="form-select" x-model="formData.school">
+                            <option value="">-- Select School --</option>
+                            <option value="sci">School of Computing and Informatics</option>
+                            <option value="sedu">School of Education</option>
+                            <option value="eng">School of Engineering</option>
+                            <option value="med">School of Medicine</option>
+                            <option value="bus">School of Business</option>
+                            <option value="nursing">School of Nursing</option>
+                        </select>
+                    </div>
+
+                    <!-- Manifesto Field -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Manifesto *</label>
+                        <textarea name="manifesto" class="form-control" rows="5" x-model="formData.manifesto" @input="updateCharCount" placeholder="Write your manifesto (max 1000 characters)..."></textarea>
+                        <div class="d-flex justify-content-between mt-1">
+                            <small class="text-muted">Your campaign promises and goals.</small>
+                            <small class="text-muted" :class="charCount > 900 ? 'text-warning' : ''" x-text="`${charCount}/1000 characters`"></small>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success btn-lg" :disabled="submitting" x-text="submitting ? 'Submitting...' : 'Submit Candidacy'"></button>
+                    </div>
+                </form>
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for error in form.non_field_errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">Confirm Your Candidacy</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Please review your details:</p>
+                    <ul>
+                        <li><strong>Gender:</strong> <span x-text="formData.gender"></span></li>
+                        <li><strong>Position:</strong> <span x-text="selectedPositionName"></span></li>
+                        <li><strong>Party:</strong> <span x-text="selectedPartyName || 'Independent'"></span></li>
+                        <li x-show="formData.hall"><strong>Hall:</strong> <span x-text="formData.hall"></span></li>
+                        <li x-show="formData.school"><strong>School:</strong> <span x-text="formData.school"></span></li>
+                        <li><strong>Manifesto:</strong> <span x-text="formData.manifesto.substring(0, 100) + (formData.manifesto.length > 100 ? '...' : '')"></span></li>
+                    </ul>
+                    <p class="text-danger">Once submitted, your candidacy will be reviewed by the election commission. You cannot edit after submission.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" @click="submitForm">Confirm & Submit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function candidateForm() {
+        return {
+            formData: {
+                gender: '',
+                position: '',
+                party: '',
+                hall: '',
+                school: '',
+                manifesto: `{{ form.manifesto.value|default:""|escapejs }}`
+            },
+            errors: {},
+            submitting: false,
+            charCount: 0,
+            selectedPositionName: '',
+            showPosition: false,
+            selectedPositionType: '',
+            allPositions: [],
+            filteredPositions: [],
+            parties: [],
+            selectedParty: null,
+            partyLogo: '',
+
+            init() {
+                this.charCount = this.formData.manifesto.length;
+                this.allPositions = {{ positions_json|safe }};
+                this.parties = {{ parties_json|safe }};
+                this.$watch('formData.gender', () => this.onGenderChange());
+                this.$watch('formData.party', (val) => {
+                    this.selectedParty = this.parties.find(p => p.id == val) || null;
+                    this.partyLogo = this.selectedParty?.logo || '';
+                });
+            },
+
+            onGenderChange() {
+                if (!this.formData.gender) {
+                    this.showPosition = false;
+                    this.filteredPositions = [];
+                    return;
+                }
+                this.filteredPositions = this.allPositions.filter(pos => 
+                    pos.allowed_genders.includes(this.formData.gender)
+                );
+                this.showPosition = true;
+                this.formData.position = '';
+                this.selectedPositionType = '';
+            },
+
+            onPositionChange() {
+                const pos = this.filteredPositions.find(p => p.id == this.formData.position);
+                if (pos) {
+                    this.selectedPositionName = pos.name;
+                    this.selectedPositionType = pos.type;
+                } else {
+                    this.selectedPositionType = '';
+                }
+                this.formData.party = '';
+                this.formData.hall = '';
+                this.formData.school = '';
+            },
+
+            updateCharCount() {
+                this.charCount = this.formData.manifesto.length;
+                if (this.charCount > 1000) this.formData.manifesto = this.formData.manifesto.slice(0,1000);
+            },
+
+            validateAndSubmit() {
+                this.errors = {};
+                let isValid = true;
+
+                if (!this.formData.gender) {
+                    this.errors.gender = 'Please select your gender.';
+                    isValid = false;
+                }
+                if (!this.formData.position) {
+                    this.errors.position = 'Please select a position.';
+                    isValid = false;
+                }
+                if (this.selectedPositionType === 'president' && !this.formData.party) {
+                    this.errors.party = 'Party is required for President.';
+                    isValid = false;
+                }
+                if (this.selectedPositionType === 'hall' && !this.formData.hall) {
+                    this.errors.hall = 'Please select a hall.';
+                    isValid = false;
+                }
+                if (this.selectedPositionType === 'school' && !this.formData.school) {
+                    this.errors.school = 'Please select a school.';
+                    isValid = false;
+                }
+                if (!this.formData.manifesto.trim()) {
+                    this.errors.manifesto = 'Manifesto is required.';
+                    isValid = false;
+                }
+
+                if (!isValid) {
+                    const firstError = document.querySelector('.has-error');
+                    if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+
+                const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+                modal.show();
+            },
+
+            submitForm() {
+                this.submitting = true;
+                const modalEl = document.getElementById('confirmModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+                document.getElementById('candidateForm').submit();
+            }
+        };
+    }
+</script>
+
+<style>
+    /* keep existing styles */
+    .has-error .form-control, .has-error .form-select {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.25rem rgba(220,53,69,0.25);
+    }
+    .invalid-feedback {
+        display: block;
+    }
+</style>
+{% endblock %}

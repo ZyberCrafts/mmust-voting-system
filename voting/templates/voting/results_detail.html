@@ -1,0 +1,283 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h3 class="mb-0">Historical Replay: {{ election.name }}</h3>
+            <span class="badge bg-light text-dark" id="voteCount">0 votes</span>
+        </div>
+        <div class="card-body">
+            <!-- Chart container -->
+            <div class="position-relative">
+                <canvas id="replayChart" width="800" height="400" style="max-width:100%; height:auto;"></canvas>
+            </div>
+
+            <!-- Controls -->
+            <div class="row mt-4 g-3 align-items-center">
+                <div class="col-auto">
+                    <button id="playBtn" class="btn btn-success">▶ Play</button>
+                    <button id="pauseBtn" class="btn btn-warning" disabled>⏸ Pause</button>
+                    <button id="resetBtn" class="btn btn-secondary">⟳ Reset</button>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Speed (x)</label>
+                    <input type="range" id="speedSlider" class="form-range" min="0.5" max="5" step="0.1" value="1">
+                    <span id="speedValue" class="ms-2">1x</span>
+                </div>
+                <div class="col-auto">
+                    <div class="progress" style="width: 300px;">
+                        <div id="replayProgress" class="progress-bar bg-success" role="progressbar" style="width:0%"></div>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <button id="exportBtn" class="btn btn-outline-secondary">📥 Export CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Optional: list of votes as they happen -->
+    <div class="card mt-4 shadow">
+        <div class="card-header bg-light">
+            <h5>Live Feed</h5>
+        </div>
+        <div class="card-body" style="max-height: 200px; overflow-y: auto;" id="feedList">
+            <p class="text-muted">Press Play to start replay.</p>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    // Data from backend
+    const electionId = {{ election.id }};
+    // Candidate map: { candidate_id: { name: "John Doe", position: "President" } }
+    // If not provided, we'll fetch dynamically
+    let candidateMap = {{ candidate_map|safe|default:'{}' }};
+    let positionMap = {{ position_map|safe|default:'{}' }};
+
+    let replayData = [];          // full timeline [{timestamp, candidate, position, candidate_name, position_name}]
+    let cumulativeData = [];      // { timestamp, cumulative_votes }
+    let chart = null;
+    let intervalId = null;
+    let currentIndex = 0;
+    let speed = 1;
+    let isPlaying = false;
+
+    // DOM elements
+    const playBtn = document.getElementById('playBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const speedSlider = document.getElementById('speedSlider');
+    const speedValue = document.getElementById('speedValue');
+    const progressBar = document.getElementById('replayProgress');
+    const voteCountSpan = document.getElementById('voteCount');
+    const feedList = document.getElementById('feedList');
+
+    // ---- Helper: fetch candidate names if missing ----
+    async function enrichReplayData(data) {
+        if (Object.keys(candidateMap).length === 0) {
+            // fetch candidate names from API (optional)
+            const candidateIds = [...new Set(data.map(v => v.candidate))];
+            const response = await fetch(`/api/candidate-names/?ids=${candidateIds.join(',')}`);
+            const names = await response.json();
+            candidateMap = names;
+        }
+        for (let vote of data) {
+            vote.candidate_name = candidateMap[vote.candidate]?.name || `Candidate ${vote.candidate}`;
+            vote.position_name = positionMap[vote.position] || `Position ${vote.position}`;
+        }
+        return data;
+    }
+
+    // ---- Load replay data from server ----
+    async function loadReplayData() {
+        const response = await fetch(`{% url "replay_votes" election.id %}?json`);
+        const rawData = await response.json();
+        replayData = await enrichReplayData(rawData);
+        // Build cumulative votes over time
+        let cumulative = 0;
+        cumulativeData = replayData.map(vote => {
+            cumulative++;
+            return {
+                timestamp: new Date(vote.time),
+                cumulativeVotes: cumulative,
+                candidate: vote.candidate_name,
+                position: vote.position_name
+            };
+        });
+        return cumulativeData;
+    }
+
+    // ---- Initialize chart ----
+    function initChart() {
+        const ctx = document.getElementById('replayChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Cumulative Votes',
+                    data: [],
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40,167,69,0.1)',
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: 2,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const index = context.dataIndex;
+                                const item = cumulativeData[index];
+                                if (item) {
+                                    return [`Votes: ${item.cumulativeVotes}`, `Candidate: ${item.candidate}`, `Position: ${item.position}`];
+                                }
+                                return `Votes: ${context.raw}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Time' } },
+                    y: { title: { display: true, text: 'Total Votes Cast' }, beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    // ---- Update chart with current data ----
+    function updateChart() {
+        const labels = cumulativeData.slice(0, currentIndex).map(item => item.timestamp.toLocaleTimeString());
+        const dataPoints = cumulativeData.slice(0, currentIndex).map(item => item.cumulativeVotes);
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = dataPoints;
+        chart.update();
+        // Update progress bar and vote count
+        const percent = (currentIndex / cumulativeData.length) * 100;
+        progressBar.style.width = percent + '%';
+        if (currentIndex > 0) {
+            voteCountSpan.innerText = `${cumulativeData[currentIndex-1].cumulativeVotes} votes`;
+        } else {
+            voteCountSpan.innerText = '0 votes';
+        }
+    }
+
+    // ---- Add a new vote to feed ----
+    function addFeedItem(vote) {
+        const div = document.createElement('div');
+        div.className = 'alert alert-sm alert-success fade show';
+        div.innerHTML = `<strong>${vote.candidate}</strong> (${vote.position}) – ${vote.timestamp.toLocaleTimeString()}`;
+        feedList.prepend(div);
+        if (feedList.children.length > 20) feedList.removeChild(feedList.lastChild);
+    }
+
+    // ---- Replay step ----
+    function step() {
+        if (currentIndex < cumulativeData.length) {
+            const vote = cumulativeData[currentIndex];
+            addFeedItem(vote);
+            currentIndex++;
+            updateChart();
+        } else {
+            stopReplay();
+            playBtn.disabled = false;
+            pauseBtn.disabled = true;
+            isPlaying = false;
+            clearInterval(intervalId);
+            intervalId = null;
+            // Optional: show completion message
+            const msg = document.createElement('div');
+            msg.className = 'alert alert-info';
+            msg.innerText = 'Replay finished.';
+            feedList.prepend(msg);
+        }
+    }
+
+    function startReplay() {
+        if (intervalId) clearInterval(intervalId);
+        isPlaying = true;
+        playBtn.disabled = true;
+        pauseBtn.disabled = false;
+        intervalId = setInterval(() => {
+            if (isPlaying) step();
+        }, 1000 / speed);
+    }
+
+    function pauseReplay() {
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
+        isPlaying = false;
+        playBtn.disabled = false;
+        pauseBtn.disabled = true;
+    }
+
+    function resetReplay() {
+        pauseReplay();
+        currentIndex = 0;
+        updateChart();
+        // clear feed
+        feedList.innerHTML = '<p class="text-muted">Press Play to start replay.</p>';
+        // Optionally reload data to ensure fresh state
+    }
+
+    function changeSpeed() {
+        speed = parseFloat(speedSlider.value);
+        speedValue.innerText = speed + 'x';
+        if (isPlaying) {
+            // restart interval with new speed
+            pauseReplay();
+            startReplay();
+        }
+    }
+
+    // ---- Export CSV ----
+    function exportCSV() {
+        let csvRows = [['Time', 'Candidate', 'Position', 'Cumulative Votes']];
+        for (let i = 0; i < cumulativeData.length; i++) {
+            const item = cumulativeData[i];
+            csvRows.push([
+                item.timestamp.toISOString(),
+                item.candidate,
+                item.position,
+                item.cumulativeVotes
+            ]);
+        }
+        const csvContent = csvRows.map(row => row.join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `replay_${electionId}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // ---- Event listeners ----
+    playBtn.addEventListener('click', () => {
+        if (currentIndex >= cumulativeData.length) resetReplay();
+        startReplay();
+    });
+    pauseBtn.addEventListener('click', pauseReplay);
+    resetBtn.addEventListener('click', resetReplay);
+    speedSlider.addEventListener('input', changeSpeed);
+    document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+    // ---- Initialization ----
+    (async () => {
+        await loadReplayData();
+        initChart();
+        resetReplay(); // sets chart to initial state
+    })();
+</script>
+{% endblock %}

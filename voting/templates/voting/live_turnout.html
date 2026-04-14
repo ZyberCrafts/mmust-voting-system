@@ -1,0 +1,258 @@
+{% extends 'voting/base.html' %}
+
+{% block content %}
+<style>
+    .turnout-card {
+        transition: transform 0.3s, box-shadow 0.3s;
+        border: none;
+        border-radius: 20px;
+        background: rgba(255,255,255,0.95);
+        backdrop-filter: blur(2px);
+    }
+    .turnout-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .counter {
+        font-size: 3rem;
+        font-weight: bold;
+        color: #2c3e50;
+        transition: all 0.2s ease;
+    }
+    .milestone {
+        animation: pulse 0.5s ease-out;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); background-color: #ffc107; }
+        50% { transform: scale(1.05); background-color: #ffc107; color: #000; }
+        100% { transform: scale(1); background-color: transparent; }
+    }
+    .chart-container {
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    .last-update {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 1rem;
+    }
+    .confetti {
+        position: fixed;
+        width: 10px;
+        height: 10px;
+        background-color: #f0f0f0;
+        position: absolute;
+        animation: fall 3s linear forwards;
+        pointer-events: none;
+        z-index: 9999;
+    }
+    @keyframes fall {
+        to { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+    }
+    @media (max-width: 768px) {
+        .counter { font-size: 2rem; }
+    }
+</style>
+
+<div x-data="liveTurnout()" x-init="initWebSocket()" class="container py-4">
+    <h2 class="text-center mb-4">Live Election Turnout – {{ election.name }}</h2>
+    
+    <div class="row g-4">
+        <div class="col-md-4">
+            <div class="card turnout-card text-center shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Votes Cast</h5>
+                    <div class="counter" x-text="formatNumber(votedCount)">0</div>
+                    <p class="text-muted small">out of <span x-text="totalVoters"></span></p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card turnout-card text-center shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Turnout</h5>
+                    <div class="counter" x-text="turnoutPercent + '%'">0%</div>
+                    <p class="text-muted small">current participation</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card turnout-card text-center shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">Total Voters</h5>
+                    <div class="counter" x-text="totalVoters">{{ total_voters }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-container mt-5">
+        <canvas id="turnoutChart" width="400" height="400"></canvas>
+    </div>
+
+    <div class="last-update text-center mt-3">
+        Last update: <span x-text="lastUpdateTime"></span>
+        <span x-show="!websocketConnected" class="badge bg-warning ms-2">Reconnecting...</span>
+    </div>
+    <div class="text-center mt-2">
+        <small class="text-muted">This page updates automatically when votes are cast.</small>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('liveTurnout', () => ({
+            electionId: {{ election.id }},
+            totalVoters: {{ total_voters }},
+            votedCount: 0,
+            turnoutPercent: 0,
+            lastUpdateTime: '',
+            websocketConnected: false,
+            socket: null,
+            chart: null,
+            milestoneSent: {},
+
+            initWebSocket() {
+                // Determine protocol (wss for https, ws for http)
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const url = `${protocol}//${window.location.host}/ws/live/${this.electionId}/`;
+                this.socket = new WebSocket(url);
+                
+                this.socket.onopen = () => {
+                    this.websocketConnected = true;
+                    console.log('WebSocket connected');
+                };
+                
+                this.socket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.updateData(data.voted, data.turnout);
+                };
+                
+                this.socket.onclose = () => {
+                    this.websocketConnected = false;
+                    console.log('WebSocket disconnected, reconnecting...');
+                    setTimeout(() => this.initWebSocket(), 3000);
+                };
+                
+                this.socket.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                };
+            },
+            
+            updateData(voted, turnout) {
+                // Animate counter
+                this.animateCounter('votedCount', this.votedCount, voted);
+                this.animateCounter('turnoutPercent', this.turnoutPercent, turnout);
+                this.votedCount = voted;
+                this.turnoutPercent = turnout;
+                this.lastUpdateTime = new Date().toLocaleTimeString();
+                
+                // Update chart
+                if (this.chart) {
+                    this.chart.data.datasets[0].data = [voted, this.totalVoters - voted];
+                    this.chart.update();
+                }
+                
+                // Check milestones and trigger confetti
+                this.checkMilestones(turnout);
+            },
+            
+            animateCounter(property, start, end) {
+                if (start === end) return;
+                const duration = 800;
+                const stepTime = 20;
+                const steps = duration / stepTime;
+                const increment = (end - start) / steps;
+                let current = start;
+                const interval = setInterval(() => {
+                    current += increment;
+                    if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                        current = end;
+                        clearInterval(interval);
+                    }
+                    this[property] = Math.round(current);
+                }, stepTime);
+            },
+            
+            checkMilestones(turnout) {
+                const thresholds = [25, 50, 75, 90];
+                for (let th of thresholds) {
+                    if (turnout >= th && !this.milestoneSent[th]) {
+                        this.milestoneSent[th] = true;
+                        this.triggerMilestone(th);
+                        this.triggerConfetti();
+                    }
+                }
+            },
+            
+            triggerMilestone(percent) {
+                const element = document.querySelector('.turnout-card');
+                element.classList.add('milestone');
+                setTimeout(() => element.classList.remove('milestone'), 500);
+                // Optional: send notification via backend? Could call an API.
+                // For now, just a visual effect.
+            },
+            
+            triggerConfetti() {
+                // Simple confetti effect
+                for (let i = 0; i < 100; i++) {
+                    const confetti = document.createElement('div');
+                    confetti.classList.add('confetti');
+                    confetti.style.left = Math.random() * window.innerWidth + 'px';
+                    confetti.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                    document.body.appendChild(confetti);
+                    setTimeout(() => confetti.remove(), 3000);
+                }
+            },
+            
+            formatNumber(num) {
+                return num.toLocaleString();
+            },
+            
+            initChart() {
+                const ctx = document.getElementById('turnoutChart').getContext('2d');
+                this.chart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Voted', 'Not Voted'],
+                        datasets: [{
+                            data: [0, this.totalVoters],
+                            backgroundColor: ['#28a745', '#dc3545'],
+                            borderWidth: 0,
+                            hoverOffset: 10
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw} voters` } }
+                        },
+                        animation: { animateRotate: true, animateScale: true }
+                    }
+                });
+            }
+        }));
+    });
+    
+    // After Alpine initializes, we need to manually create chart because Alpine might not have mounted yet
+    window.addEventListener('DOMContentLoaded', () => {
+        if (window.Alpine && document.querySelector('[x-data]')) {
+            // Wait for Alpine to be ready
+            setTimeout(() => {
+                const app = document.querySelector('[x-data]').__x;
+                if (app && app.initChart) app.initChart();
+            }, 100);
+        } else {
+            // Fallback: create chart manually
+            const ctx = document.getElementById('turnoutChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: ['Voted', 'Not Voted'], datasets: [{ data: [0, {{ total_voters }}], backgroundColor: ['#28a745', '#dc3545'] }] }
+            });
+        }
+    });
+</script>
+{% endblock %}

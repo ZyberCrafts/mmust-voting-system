@@ -1,0 +1,125 @@
+{% extends 'voting/base.html' %}
+
+{% block content %}
+<div x-data="withdrawHandler()" x-init="init()" class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <!-- Animated card -->
+            <div class="card shadow-lg border-0 animate__animated animate__fadeInUp" style="border-radius: 1rem;">
+                <div class="card-header bg-danger text-white text-center py-4" style="border-radius: 1rem 1rem 0 0;">
+                    <i class="fas fa-exclamation-triangle fa-3x mb-2"></i>
+                    <h3 class="mb-0">Withdraw from Election</h3>
+                    <p class="mb-0 mt-2 opacity-75">This action is irreversible</p>
+                </div>
+                <div class="card-body p-4">
+                    <!-- Candidate info with icons -->
+                    <div class="alert alert-warning d-flex align-items-center mb-4 animate__animated animate__pulse animate__infinite" style="animation-iteration-count: 2;">
+                        <i class="fas fa-user-graduate fa-2x me-3"></i>
+                        <div>
+                            <strong>{{ candidate.user.get_full_name }}</strong><br>
+                            <span class="small">Position: {{ candidate.position.name }}</span><br>
+                            <span class="small">Election: {{ candidate.election.name }}</span>
+                        </div>
+                    </div>
+
+                    <p class="text-muted mb-4">
+                        <i class="fas fa-info-circle"></i> Withdrawing means you will no longer appear on the ballot. 
+                        Your supporters will be notified. This action cannot be undone.
+                    </p>
+
+                    <!-- Withdrawal form with hidden original confirm field + custom checkbox -->
+                    <form method="post" @submit="loading = true">
+                        {% csrf_token %}
+                        
+                        <!-- Hidden original confirm field (required by form validation) -->
+                        {{ form.confirm.as_hidden }}
+
+                        <!-- Custom checkbox with Alpine binding -->
+                        <div class="form-check mb-4">
+                            <input type="checkbox" class="form-check-input" id="confirmCheck" x-model="confirmed" @change="document.getElementById('id_confirm').value = confirmed">
+                            <label class="form-check-label" for="confirmCheck">
+                                I understand that withdrawing is final and I cannot re‑enter this election.
+                            </label>
+                        </div>
+
+                        <!-- Action buttons -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary me-md-2">
+                                <i class="fas fa-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger" :disabled="!confirmed || loading">
+                                <i class="fas fa-user-slash" x-show="!loading"></i>
+                                <span x-show="!loading">Confirm Withdrawal</span>
+                                <span x-show="loading" class="spinner-border spinner-border-sm" role="status"></span>
+                                <span x-show="loading"> Processing...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer bg-light text-muted text-center small py-2">
+                    <i class="fas fa-envelope"></i> An email notification will be sent to the election administrators.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay (shown during form submission) -->
+    <div x-show="loading" class="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex justify-content-center align-items-center" style="z-index: 9999;">
+        <div class="bg-white p-4 rounded-3 shadow text-center">
+            <div class="spinner-border text-danger mb-3" role="status"></div>
+            <p>Processing your withdrawal request...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    function withdrawHandler() {
+        return {
+            confirmed: false,
+            loading: false,
+            init() {
+                // Set initial hidden field value to false (unchecked)
+                document.getElementById('id_confirm').value = 'false';
+            }
+        };
+    }
+</script>
+
+<style>
+    .animate__animated {
+        animation-duration: 0.8s;
+        animation-fill-mode: both;
+    }
+    .animate__fadeInUp {
+        animation-name: fadeInUp;
+    }
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translate3d(0, 40px, 0);
+        }
+        to {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+        }
+    }
+    .animate__pulse {
+        animation: pulse 1.5s ease-in-out 2;
+    }
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+    .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+    }
+    .form-check-input:checked {
+        background-color: #dc3545;
+        border-color: #dc3545;
+    }
+</style>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+{% endblock %}

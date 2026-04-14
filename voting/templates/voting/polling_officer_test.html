@@ -1,0 +1,273 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4" x-data="pollingOfficerTest()" x-init="init()">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Main Card -->
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+                <div class="card-header bg-primary text-white py-4">
+                    <h3 class="mb-0 fw-bold">
+                        <i class="bi bi-clipboard-check me-2"></i> Polling Officer Qualification Test
+                    </h3>
+                    <p class="mb-0 mt-2 opacity-75">Demonstrate your knowledge of election procedures</p>
+                </div>
+
+                <div class="card-body p-4">
+                    <!-- Progress Bar -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>Completion</span>
+                            <span x-text="completionPercent + '%'"></span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar bg-success" 
+                                 :style="{ width: completionPercent + '%' }" 
+                                 role="progressbar"
+                                 :aria-valuenow="completionPercent" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Countdown Timer (Optional) -->
+                    <div class="alert alert-info d-flex align-items-center mb-4" x-show="!submitted">
+                        <i class="bi bi-hourglass-split me-2 fs-4"></i>
+                        <div>
+                            <strong>Time Remaining:</strong> 
+                            <span x-text="formatTime(timeLeft)"></span>
+                            <span class="ms-2 small">(auto-submit when reaches zero)</span>
+                        </div>
+                    </div>
+
+                    <!-- Form -->
+                    <form method="post" id="testForm" @submit.prevent="submitForm">
+                        {% csrf_token %}
+                        
+                        <!-- Render form fields with Alpine bindings -->
+                        <div class="row">
+                            {% for field in form %}
+                            <div class="col-12 mb-4" x-data="{ answer: '' }" x-effect="updateProgress()">
+                                <label class="form-label fw-semibold">
+                                    <i class="bi bi-question-circle me-1 text-primary"></i>
+                                    {{ field.label }}
+                                </label>
+                                {{ field }}
+                                <div class="form-text text-muted small">Provide a detailed answer (min 20 characters)</div>
+                                <div class="invalid-feedback" x-show="!isValid(field.name) && touched[field.name]">
+                                    Please answer this question (minimum 20 characters).
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <button type="button" class="btn btn-outline-secondary" @click="resetForm">
+                                <i class="bi bi-arrow-repeat me-1"></i> Reset
+                            </button>
+                            <div>
+                                <button type="button" class="btn btn-warning me-2" @click="sendReminder">
+                                    <i class="bi bi-envelope me-1"></i> Email Reminder
+                                </button>
+                                <button type="submit" class="btn btn-success btn-lg px-4" :disabled="!isFormValid || submitted">
+                                    <i class="bi bi-check2-circle me-2"></i>
+                                    <span x-text="submitted ? 'Submitting...' : 'Submit Test'"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Success/Error Modal -->
+                    <div class="modal fade" id="resultModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header" :class="modalClass">
+                                    <h5 class="modal-title" x-text="modalTitle"></h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body" x-text="modalMessage"></div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Inline CSS & JS -->
+<style>
+    /* Custom styles */
+    .card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 1rem 2rem rgba(0,0,0,0.1) !important;
+    }
+    textarea {
+        transition: border-color 0.2s, box-shadow 0.2s;
+        border-radius: 0.5rem;
+    }
+    textarea:focus {
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+    }
+    .progress-bar {
+        transition: width 0.5s ease;
+    }
+    .btn {
+        transition: all 0.2s;
+    }
+    .btn-success:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+</style>
+
+<!-- Alpine.js Component -->
+<script>
+    function pollingOfficerTest() {
+        return {
+            timeLeft: 1800, // 30 minutes in seconds (adjustable)
+            timerInterval: null,
+            submitted: false,
+            answers: {},
+            touched: {},
+            modalTitle: '',
+            modalMessage: '',
+            modalClass: 'bg-success text-white',
+
+            init() {
+                // Start countdown if not already submitted
+                if (!this.submitted) {
+                    this.startTimer();
+                }
+                // Initialize answers from existing form values
+                const form = document.getElementById('testForm');
+                const textareas = form.querySelectorAll('textarea');
+                textareas.forEach(ta => {
+                    const name = ta.name;
+                    this.answers[name] = ta.value;
+                    ta.addEventListener('input', (e) => {
+                        this.answers[name] = e.target.value;
+                        this.touched[name] = true;
+                        this.updateProgress();
+                    });
+                });
+                this.updateProgress();
+            },
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    if (this.timeLeft <= 0) {
+                        clearInterval(this.timerInterval);
+                        if (!this.submitted) {
+                            this.submitForm();
+                        }
+                    } else {
+                        this.timeLeft--;
+                    }
+                }, 1000);
+            },
+            formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+            },
+            updateProgress() {
+                // Count number of answered fields (non-empty, min 20 chars)
+                let total = 0;
+                let answered = 0;
+                const textareas = document.querySelectorAll('#testForm textarea');
+                total = textareas.length;
+                for (let ta of textareas) {
+                    if (ta.value.trim().length >= 20) {
+                        answered++;
+                    }
+                }
+                this.completionPercent = total ? Math.round((answered / total) * 100) : 0;
+            },
+            isValid(fieldName) {
+                const value = this.answers[fieldName] || '';
+                return value.trim().length >= 20;
+            },
+            get isFormValid() {
+                const textareas = document.querySelectorAll('#testForm textarea');
+                for (let ta of textareas) {
+                    if (ta.value.trim().length < 20) return false;
+                }
+                return true;
+            },
+            async submitForm() {
+                if (!this.isFormValid) {
+                    this.modalTitle = 'Incomplete Test';
+                    this.modalMessage = 'Please answer all questions with at least 20 characters each.';
+                    this.modalClass = 'bg-danger text-white';
+                    const modal = new bootstrap.Modal(document.getElementById('resultModal'));
+                    modal.show();
+                    return;
+                }
+                this.submitted = true;
+                clearInterval(this.timerInterval);
+                // Submit via AJAX to avoid page reload and show result modal
+                const formData = new FormData(document.getElementById('testForm'));
+                try {
+                    const response = await fetch(window.location.href, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+                    const html = await response.text();
+                    // Parse response to extract messages (simplified – we assume success/failure messages are in the response)
+                    // For better UX, we can check redirect or extract from response.
+                    // Simpler: after submission, reload to see Django messages.
+                    window.location.href = window.location.href;
+                } catch (error) {
+                    console.error(error);
+                    this.submitted = false;
+                }
+            },
+            resetForm() {
+                if (confirm('Reset all answers? This cannot be undone.')) {
+                    const textareas = document.querySelectorAll('#testForm textarea');
+                    textareas.forEach(ta => {
+                        ta.value = '';
+                        this.answers[ta.name] = '';
+                        this.touched[ta.name] = true;
+                    });
+                    this.updateProgress();
+                }
+            },
+            async sendReminder() {
+                // Send an AJAX request to resend the test invitation email
+                try {
+                    const response = await fetch('/api/resend-test-reminder/', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({})
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        alert('Reminder email sent successfully!');
+                    } else {
+                        alert('Failed to send reminder. Please contact admin.');
+                    }
+                } catch (error) {
+                    alert('Network error. Please try again later.');
+                }
+            }
+        };
+    }
+</script>
+{% endblock %}

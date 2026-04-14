@@ -1,0 +1,304 @@
+{% extends 'voting/base.html' %}
+{% block content %}
+<div x-data="dashboard()" x-init="init()" class="row">
+    <!-- Main Card -->
+    <div class="col-lg-12 mb-4">
+        <div class="card shadow border-0 animate__animated animate__fadeIn">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">Welcome, {{ user.get_full_name|default:user.username }}</h4>
+                <span class="badge bg-light text-dark">
+                    {% if user.is_superuser or user.is_staff %}Admin
+                    {% else %}{{ user.get_role_display }}{% endif %}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Voter ID:</strong> {{ user.voter_id }}</p>
+                        <p><strong>Verified:</strong>
+                            <span class="badge" :class="verifiedClass" x-text="verificationStatus"></span>
+                        </p>
+                        {% if election %}
+                            <h5 class="mt-3">{{ election.name }}</h5>
+                            <p><i class="bi bi-calendar-event"></i> {{ election.start_time|date:"d M Y H:i" }} – {{ election.end_time|date:"d M Y H:i" }}</p>
+                            <div class="mt-2">
+                                {% if election.is_ongoing %}
+                                    <a href="{% url 'voting_ballot' %}" class="btn btn-success btn-lg animate__animated animate__pulse animate__infinite">🗳️ Vote Now</a>
+                                {% elif election.is_upcoming %}
+                                    <div class="alert alert-info" x-data="countdown('{{ election.start_time.isoformat }}')" x-init="start()">
+                                        <strong>Voting starts in:</strong>
+                                        <span x-text="days">0</span>d <span x-text="hours">0</span>h <span x-text="minutes">0</span>m <span x-text="seconds">0</span>s
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-secondary">
+                                        Voting ended. <a href="{% url 'results' %}" class="alert-link">View Results</a>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">No active election at the moment.</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <!-- (optional extra info, kept empty but could be used for announcements) -->
+                    </div>
+                </div>
+
+                <!-- REPLACED CANDIDATE BLOCK START (with questionnaire link) -->
+                {% if user.role == 'candidate' %}
+                    <hr>
+                    <h5>Candidate Area</h5>
+                    {% if candidacy %}
+                        <!-- Existing candidate info -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Position:</strong> {{ candidacy.position.name }}</p>
+                                <p><strong>Party:</strong> {{ candidacy.party.name|default:"Independent" }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Status:</strong>
+                                    {% if candidacy.verified %}
+                                        <span class="badge bg-success">✅ Verified</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">⏳ Pending</span>
+                                    {% endif %}
+                                </p>
+                                <a href="{% url 'candidate_profile' candidacy.id %}" class="btn btn-sm btn-outline-primary">View Profile</a>
+                            </div>
+                        </div>
+                        <!-- Questionnaire alert (updated wording as requested) -->
+                        {% if not candidacy.questionnaire_completed %}
+                            <div class="alert alert-warning mt-3">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                Please complete the <a href="{% url 'candidate_questionnaire' %}" class="alert-link">candidate questionnaire</a> to finalize your candidacy.
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <!-- No candidacy yet – prompt to register -->
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> 
+                            You have not registered for any position yet. 
+                            <a href="{% url 'candidate_register' %}" class="alert-link">Click here to register as a candidate</a>.
+                        </div>
+                    {% endif %}
+                {% endif %}
+                <!-- REPLACED CANDIDATE BLOCK END -->
+
+                {% if user.role == 'polling_officer' %}
+                    <hr>
+                    <h5>Polling Officer Status</h5>
+                    {% if test %}
+                        <div class="progress mb-2" style="height: 25px;">
+                            <div class="progress-bar {% if test.passed %}bg-success{% else %}bg-danger{% endif %}"
+                                 role="progressbar" style="width: {{ test.score }}%"
+                                 aria-valuenow="{{ test.score }}" aria-valuemin="0" aria-valuemax="100">
+                                {{ test.score }}%
+                            </div>
+                        </div>
+                        <p>{% if test.passed %}✅ Qualified{% else %}❌ Not Qualified{% endif %}</p>
+                    {% else %}
+                        <a href="{% url 'polling_officer_test' %}" class="btn btn-warning">Take Qualification Test</a>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Election Dashboard (visible to all authenticated users when election is ongoing) -->
+    {% if election and election.is_ongoing %}
+    <div class="col-12 mb-4">
+        <div class="card shadow border-0">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-graph-up"></i> Live Election Dashboard</h5>
+                <span class="badge bg-light text-dark" id="liveTimestamp">Updating...</span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="text-center p-3">
+                            <h6>Voter Turnout</h6>
+                            <div class="display-4 fw-bold text-success" id="turnoutPercent">0%</div>
+                            <small id="votedCount">0</small> / <small id="totalVoters">{{ total_voters|default:0 }}</small> votes cast
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <h6>Live Candidate Performance</h6>
+                        <div id="candidateCharts"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if is_leader %}
+        <div class="col-12 mt-3">
+            <div class="card shadow border-0 animate__animated animate__fadeInUp">
+                <div class="card-header bg-primary text-white">
+                    <h5><i class="bi bi-trophy-fill me-2"></i>Leader Dashboard</h5>
+                </div>
+                <div class="card-body">
+                    <p>View ratings and feedback on your manifesto promises.</p>
+                    <a href="{% url 'leader_dashboard' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-bar-chart-steps"></i> Go to Leader Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Admin Quick Links (if staff) -->
+    {% if user.is_staff %}
+        <div class="col-12 mt-3">
+            <div class="card shadow border-0">
+                <div class="card-header bg-secondary text-white">Admin Tools</div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'verify_users' %}" class="btn btn-outline-primary w-100">Verify Users</a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-primary w-100">Admin Dashboard</a>
+                        </div>
+                        {% if election %}
+                            <div class="col-md-3 mb-2">
+                                <a href="{% url 'live_map' election.id %}" class="btn btn-outline-primary w-100">Live Map</a>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <a href="{% url 'replay_votes' election.id %}" class="btn btn-outline-primary w-100">Replay Voting</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Toast container for verification status change notification -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="verificationToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000">
+        <div class="d-flex">
+            <div class="toast-body">Your account has been verified!</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="Toast"></button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+<script>
+    // Countdown timer for upcoming elections (kept from original)
+    function countdown(endTime) {
+        return {
+            days: 0, hours: 0, minutes: 0, seconds: 0,
+            start() {
+                const update = () => {
+                    const now = new Date();
+                    const end = new Date(endTime);
+                    const diff = end - now;
+                    if (diff <= 0) {
+                        this.days = this.hours = this.minutes = this.seconds = 0;
+                        location.reload(); // election just started
+                        return;
+                    }
+                    this.days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                    this.hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    this.minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    this.seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                };
+                update();
+                setInterval(update, 1000);
+            }
+        };
+    }
+
+    // Alpine component for dynamic verification status
+    function dashboard() {
+        return {
+            verificationStatus: 'Loading...',
+            verifiedClass: 'bg-warning text-dark',
+            previousVerified: null,
+            init() {
+                this.fetchStatus();
+                setInterval(() => this.fetchStatus(), 30000); // poll every 30s
+            },
+            fetchStatus() {
+                fetch('/api/user/status/')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        const isVerified = data.is_verified;
+                        if (isVerified) {
+                            this.verificationStatus = '✅ Verified';
+                            this.verifiedClass = 'bg-success';
+                        } else {
+                            this.verificationStatus = '⏳ Pending';
+                            this.verifiedClass = 'bg-warning text-dark';
+                        }
+                        if (this.previousVerified !== null && !this.previousVerified && isVerified) {
+                            const toast = new bootstrap.Toast(document.getElementById('verificationToast'));
+                            toast.show();
+                        }
+                        this.previousVerified = isVerified;
+                    })
+                    .catch(error => {
+                        console.error('Failed to fetch verification status:', error);
+                        this.verificationStatus = 'Error';
+                        this.verifiedClass = 'bg-danger';
+                    });
+            }
+        };
+    }
+
+    // Register the Alpine component
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('dashboard', dashboard);
+    });
+
+    // Live WebSocket connection for all users (public + admin)
+    {% if election and election.is_ongoing %}
+        const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const socket = new WebSocket(`${wsScheme}://${window.location.host}/ws/live/{{ election.id }}/`);
+        const charts = {};
+
+        socket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            // Update turnout
+            document.getElementById('turnoutPercent').innerText = data.turnout + '%';
+            document.getElementById('votedCount').innerText = data.voted;
+            document.getElementById('liveTimestamp').innerHTML = new Date(data.timestamp).toLocaleTimeString();
+
+            // Update candidate charts
+            for (const [position, candidates] of Object.entries(data.candidates)) {
+                if (!charts[position]) {
+                    // Create a new canvas for this position
+                    const container = document.getElementById('candidateCharts');
+                    const card = document.createElement('div');
+                    card.className = 'card mb-3';
+                    const safeId = 'chart-' + position.replace(/\s/g, '').replace(/[^a-zA-Z0-9]/g, '');
+                    card.innerHTML = `<div class="card-header">${position}</div><div class="card-body"><canvas id="${safeId}"></canvas></div>`;
+                    container.appendChild(card);
+                    const ctx = document.getElementById(safeId).getContext('2d');
+                    charts[position] = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: candidates.map(c => c.name),
+                            datasets: [{ label: 'Votes', data: candidates.map(c => c.count), backgroundColor: candidates.map(c => c.color) }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: true }
+                    });
+                } else {
+                    // Update existing chart
+                    charts[position].data.datasets[0].data = candidates.map(c => c.count);
+                    charts[position].update();
+                }
+            }
+        };
+    {% endif %}
+</script>
+{% endblock %}

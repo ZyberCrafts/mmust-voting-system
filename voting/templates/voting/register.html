@@ -1,0 +1,421 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-7">
+        <!-- Animated border card (thin moving snake) -->
+        <div class="card shadow animate-border">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">Register as a New User</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" id="registerForm" x-data="registrationForm()">
+                    {% csrf_token %}
+                    {% if form.errors %}
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <strong>Please correct the following errors:</strong>
+                            <ul class="mb-0 mt-2">
+                                {% for field, errors in form.errors.items %}
+                                    {% for error in errors %}
+                                        <li><strong>{{ field|title }}:</strong> {{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                            </ul>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endif %}
+                    <!-- Basic Information (always visible) -->
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Username*</label>
+                            {{ form.username }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email*</label>
+                            {{ form.email }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">First Name*</label>
+                            {{ form.first_name }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Last Name*</label>
+                            {{ form.last_name }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Password*</label>
+                            <div class="input-group">
+                                <input type="password" name="password1" id="id_password1" class="form-control" required>
+                                <button class="btn btn-outline-secondary toggle-password" type="button" data-target="id_password1">
+                                    <i class="bi bi-eye-slash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Confirm Password*</label>
+                            <div class="input-group">
+                                <input type="password" name="password2" id="id_password2" class="form-control" required>
+                                <button class="btn btn-outline-secondary toggle-password" type="button" data-target="id_password2">
+                                    <i class="bi bi-eye-slash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone*</label>
+                            {{ form.phone }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Role*</label>
+                            <div x-model="role" @change="updateRoleFields">
+                                {{ form.role }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security Question -->
+                    <div class="mt-3">
+                        <label class="form-label">Security Question*</label>
+                        {{ form.security_question }}
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label">Security Answer*</label>
+                        {{ form.security_answer }}
+                    </div>
+
+                    <!-- Identification -->
+                    <div class="mt-3">
+                        <label class="form-label">ID Type*</label>
+                        {{ form.id_type }}
+                    </div>
+                    <div class="mt-2" id="idPhotoGroup">
+                        <label class="form-label" id="idPhotoLabel">ID Photo (Upload)*</label>
+                        {{ form.id_photo }}
+                        <div class="form-text">Upload a clear photo of your ID card.</div>
+                    </div>
+
+                    <!-- Face Capture Section -->
+                    <div class="mt-3">
+                        <label class="form-label">Face Capture (Selfie)</label>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <button type="button" class="btn btn-secondary" id="openCameraBtn">📷 Open Camera</button>
+                            <button type="button" class="btn btn-primary" id="captureBtn" disabled>📸 Capture</button>
+                            <button type="button" class="btn btn-danger" id="retakeBtn" disabled>🗑️ Retake / Close</button>
+                        </div>
+                        <div id="cameraContainer" style="display: none;">
+                            <video id="video" width="100%" autoplay style="border-radius: 10px; border: 2px solid var(--primary-btn);"></video>
+                            <canvas id="canvas" style="display: none;"></canvas>
+                        </div>
+                        <input type="hidden" name="face_data" id="face_data">
+                        <div id="faceStatus" class="form-text text-muted mt-1"></div>
+                    </div>
+
+                    <!-- ========== ROLE‑BASED FIELDS ========== -->
+                    <!-- Student fields (visible only for voter or candidate) -->
+                    <div x-show="role === 'voter' || role === 'candidate'" x-cloak>
+                        <hr>
+                        <h5 class="text-primary">Student Information</h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Admission Number*</label>
+                                {{ form.admission_number }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Course*</label>
+                                {{ form.course }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Year of Study*</label>
+                                {{ form.year_of_study }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Residence*</label>
+                                {{ form.residence }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">School*</label>
+                                <select name="school" id="id_school" class="form-select">
+                                    <option value="">Select School</option>
+                                    {% for school in form.fields.school.queryset %}
+                                        <option value="{{ school.pk }}" data-code="{{ school.code }}">{{ school.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Department*</label>
+                                <select name="department" id="id_department" class="form-select">
+                                    <option value="">Select Department</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Polling Station (auto‑filled)</label>
+                                {{ form.polling_station }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Polling Officer fields (staff) -->
+                    <div x-show="role === 'polling_officer'" x-cloak>
+                        <hr>
+                        <h5 class="text-primary">Staff Information</h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Staff ID*</label>
+                                {{ form.staff_id }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Department / Unit*</label>
+                                {{ form.department_work }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Admin / Board Member -->
+                    <div x-show="role === 'admin' || role === 'board'" x-cloak>
+                        <hr>
+                        <div class="alert alert-info">No additional information required for this role.</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 mt-4">Register</button>
+                </form>
+
+                <!-- ========== ADDED LINK TO LOGIN PAGE ========== -->
+                <div class="text-center mt-3">
+                    <p class="mb-0">Already have an account? <a href="{% url 'login' %}" class="text-primary fw-bold">Login here</a></p>
+                </div>
+                <!-- ========== END ADDITION ========== -->
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    [x-cloak] { display: none !important; }
+    .form-select, .form-control { background-color: var(--card-bg); color: var(--text-color); border-color: var(--border-color); }
+    .form-label { font-weight: 500; }
+    .errorlist { color: #dc3545; list-style: none; padding-left: 0; font-size: 0.9rem; }
+
+    /* ---------- Moving snake border (thin, no background change) ---------- */
+    .animate-border {
+        position: relative;
+        border-radius: 20px;
+        background: var(--card-bg); /* ensures solid background */
+        z-index: 0;
+    }
+    .animate-border::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        padding: 2px; /* border thickness */
+        background: linear-gradient(90deg, #0000ff, #28a745, #ffc107, #0000ff);
+        background-size: 300% 100%;
+        border-radius: 20px;
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        mask-composite: exclude;
+        animation: snakeBorder 6s linear infinite;
+        pointer-events: none;
+        z-index: -1;
+    }
+    @keyframes snakeBorder {
+        0% { background-position: 0% 50%; }
+        100% { background-position: 100% 50%; }
+    }
+
+    /* Responsive fix: prevent overflow on small screens */
+    @media (max-width: 768px) {
+        .row.g-3 > [class*="col-"] {
+            margin-bottom: 0.75rem;
+        }
+        .btn-group {
+            flex-wrap: wrap;
+        }
+    }
+    /* Password toggle button styling */
+    .toggle-password {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-left: none;
+        transition: all 0.2s;
+    }
+    .toggle-password:hover {
+        background-color: var(--border-color);
+    }
+</style>
+
+<script>
+    // ------------------------------------------------------------------
+    // Alpine.js component for role‑based field visibility
+    // ------------------------------------------------------------------
+    function registrationForm() {
+        return {
+            role: 'voter',
+            updateRoleFields() { /* no extra logic needed */ }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Password visibility toggle (eye icon)
+    // ------------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleButtons = document.querySelectorAll('.toggle-password');
+        toggleButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                const targetId = this.getAttribute('data-target');
+                const input = document.getElementById(targetId);
+                if (input) {
+                    const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+                    input.setAttribute('type', type);
+                    const icon = this.querySelector('i');
+                    if (icon) {
+                        if (type === 'text') {
+                            icon.classList.remove('bi-eye-slash');
+                            icon.classList.add('bi-eye');
+                        } else {
+                            icon.classList.remove('bi-eye');
+                            icon.classList.add('bi-eye-slash');
+                        }
+                    }
+                }
+            });
+        });
+    });
+
+    // ------------------------------------------------------------------
+    // Camera & Face Capture Logic
+    // ------------------------------------------------------------------
+    (function() {
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const faceDataInput = document.getElementById('face_data');
+        const openCameraBtn = document.getElementById('openCameraBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const retakeBtn = document.getElementById('retakeBtn');
+        const cameraContainer = document.getElementById('cameraContainer');
+        const faceStatus = document.getElementById('faceStatus');
+        let stream = null;
+
+        openCameraBtn.addEventListener('click', async () => {
+            // Clear any previous capture data and preview
+            faceDataInput.value = '';
+            const oldPreview = document.getElementById('facePreview');
+            if (oldPreview) oldPreview.remove();
+            faceStatus.innerHTML = '';
+
+            try {
+                if (stream) stream.getTracks().forEach(track => track.stop());
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                cameraContainer.style.display = 'block';
+                captureBtn.disabled = false;
+                retakeBtn.disabled = false;
+                faceStatus.innerHTML = 'Camera is ready. Click Capture to take a selfie.';
+            } catch (err) {
+                console.error('Camera error:', err);
+                faceStatus.innerHTML = 'Could not access camera. Please check permissions.';
+            }
+        });
+
+        captureBtn.addEventListener('click', () => {
+            if (!video.srcObject) {
+                faceStatus.innerHTML = 'Please open the camera first.';
+                return;
+            }
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataURL = canvas.toDataURL('image/jpeg');
+            faceDataInput.value = dataURL;
+            faceStatus.innerHTML = '✅ Face captured. You can now register.';
+
+            // Show preview
+            let previewDiv = document.getElementById('facePreview');
+            if (!previewDiv) {
+                previewDiv = document.createElement('div');
+                previewDiv.id = 'facePreview';
+                cameraContainer.appendChild(previewDiv);
+            }
+            previewDiv.innerHTML = `<img src="${dataURL}" style="max-width:150px; border-radius:10px; margin-top:10px;">`;
+
+            // Stop camera stream and hide video container
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+            cameraContainer.style.display = 'none';
+            captureBtn.disabled = true;
+            retakeBtn.disabled = false;   // allow retake
+        });
+
+        retakeBtn.addEventListener('click', () => {
+            // Remove preview and clear captured data
+            const preview = document.getElementById('facePreview');
+            if (preview) preview.remove();
+            faceDataInput.value = '';
+            faceStatus.innerHTML = '';
+            // Reopen camera
+            openCameraBtn.click();
+        });
+    })();
+
+    // ------------------------------------------------------------------
+    // Dynamic Department Loading (based on selected school)
+    // ------------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', function() {
+        const schoolSelect = document.getElementById('id_school');
+        const departmentSelect = document.getElementById('id_department');
+
+        if (schoolSelect && departmentSelect) {
+            schoolSelect.addEventListener('change', function() {
+                const schoolId = this.value;
+                if (!schoolId) {
+                    departmentSelect.innerHTML = '<option value="">Select Department</option>';
+                    return;
+                }
+                fetch(`/api/departments/?school_id=${schoolId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        departmentSelect.innerHTML = '<option value="">Select Department</option>';
+                        data.forEach(dept => {
+                            const option = document.createElement('option');
+                            option.value = dept.id;
+                            option.textContent = dept.name;
+                            departmentSelect.appendChild(option);
+                        });
+                    })
+                    .catch(error => console.error('Error loading departments:', error));
+            });
+        }
+    });
+
+    // ------------------------------------------------------------------
+    // ID Type dynamic label
+    // ------------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', function() {
+        const idTypeRadios = document.querySelectorAll('input[name="id_type"]');
+        const idPhotoLabel = document.getElementById('idPhotoLabel');
+        const fileInput = document.querySelector('#id_photo');
+        if (idTypeRadios.length && idPhotoLabel) {
+            function updateIdPhotoLabel() {
+                let selected = document.querySelector('input[name="id_type"]:checked');
+                if (selected) {
+                    const val = selected.value;
+                    let labelText = '';
+                    if (val === 'national_id') labelText = 'National ID (Upload)*';
+                    else if (val === 'birth_cert') labelText = 'Birth Certificate (Upload)*';
+                    else if (val === 'school_id') labelText = 'School ID (Upload)*';
+                    else labelText = 'ID Photo (Upload)*';
+                    idPhotoLabel.textContent = labelText;
+                }
+            }
+            idTypeRadios.forEach(radio => radio.addEventListener('change', updateIdPhotoLabel));
+            updateIdPhotoLabel(); // initial
+        }
+    });
+</script>
+{% endblock %}

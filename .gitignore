@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+ENV/
+.env
+*.sqlite3
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Secrets
+SECRET_KEY

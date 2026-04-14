@@ -1,0 +1,128 @@
+{% extends 'voting/base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="text-primary"><i class="fas fa-shield-alt"></i> Security Dashboard</h2>
+            <p class="text-muted">Real‑time attack monitoring and analysis</p>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-danger shadow">
+                <div class="card-body">
+                    <h5 class="card-title">Total Attacks</h5>
+                    <h2>{{ total_attacks }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning shadow">
+                <div class="card-body">
+                    <h5 class="card-title">Today</h5>
+                    <h2>{{ today_count }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info shadow">
+                <div class="card-body">
+                    <h5 class="card-title">Critical</h5>
+                    <h2>{{ by_severity.0.cnt|default:0 }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attack Types Chart (simple bar) -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">Attack Types</div>
+                <div class="card-body">
+                    <canvas id="attackChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">Severity Levels</div>
+                <div class="card-body">
+                    <canvas id="severityChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attack Logs Table -->
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">Recent Attacks</div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>Severity</th>
+                            <th>IP</th>
+                            <th>Path</th>
+                            <th>User</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td>{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
+                            <td><span class="badge bg-{{ log.attack_type|attack_badge }}">{{ log.get_attack_type_display }}</span></td>
+                            <td>
+                                <span class="badge bg-{% if log.severity >= 3 %}danger{% elif log.severity == 2 %}warning{% else %}secondary{% endif %}">
+                                    {{ log.get_severity_display }}
+                                </span>
+                            </td>
+                            <td>{{ log.ip_address }}</td>
+                            <td><code>{{ log.request_path|truncatechars:40 }}</code></td>
+                            <td>{{ log.username|default:"Anonymous" }}</td>
+                            <td>
+                                <a href="{% url 'security:attack_detail' log.pk %}" class="btn btn-sm btn-info">Details</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center">No attacks recorded yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            {% include 'voting/pagination.html' with page=logs %}
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Attack types chart
+    const attackCtx = document.getElementById('attackChart').getContext('2d');
+    const attackData = {{ by_type|safe }};
+    new Chart(attackCtx, {
+        type: 'bar',
+        data: {
+            labels: attackData.map(d => d.attack_type),
+            datasets: [{ label: 'Count', data: attackData.map(d => d.cnt), backgroundColor: '#dc3545' }]
+        }
+    });
+    // Severity chart
+    const severityCtx = document.getElementById('severityChart').getContext('2d');
+    const severityData = {{ by_severity|safe }};
+    new Chart(severityCtx, {
+        type: 'pie',
+        data: {
+            labels: severityData.map(d => d.severity),
+            datasets: [{ data: severityData.map(d => d.cnt), backgroundColor: ['#28a745', '#ffc107', '#dc3545'] }]
+        }
+    });
+</script>

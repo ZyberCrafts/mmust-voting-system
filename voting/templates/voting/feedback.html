@@ -1,0 +1,172 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow animate__animated animate__fadeInUp" style="border-radius: 20px; overflow: hidden;">
+            <div class="card-header bg-primary text-white text-center py-4">
+                <h3 class="mb-0">
+                    <i class="fas fa-smile-wink"></i> Your Feedback Matters
+                </h3>
+                <p class="mb-0 small">Help us improve the voting experience</p>
+            </div>
+            <div class="card-body p-4">
+
+                <!-- Election context (if passed) -->
+                {% if election %}
+                <div class="alert alert-light text-center mb-4" style="border-left: 4px solid var(--mmust-blue);">
+                    <strong>Election:</strong> {{ election.name }}
+                </div>
+                {% endif %}
+
+                <form method="post" x-data="feedbackForm()" @submit.prevent="submitForm">
+                    {% csrf_token %}
+
+                    <!-- Rating with animated stars -->
+                    <div class="mb-4 text-center">
+                        <label class="form-label fw-bold">Rate your voting experience</label>
+                        <div class="d-flex justify-content-center gap-2">
+                            <template x-for="i in 5" :key="i">
+                                <button type="button"
+                                        @click="rating = i"
+                                        class="star-btn"
+                                        :class="{ 'selected': rating >= i }"
+                                        :style="'transition: all 0.2s ease; transform: scale(' + (rating >= i ? '1.1' : '1') + ');'">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <polygon points="12 17.27 18.18 21 16.54 13.97 22 9.24 14.81 8.63 12 2 9.19 8.63 2 9.24 7.46 13.97 5.82 21 12 17.27" />
+                                    </svg>
+                                </button>
+                            </template>
+                        </div>
+                        <input type="hidden" name="rating" :value="rating" id="id_rating">
+                    </div>
+
+                    <!-- Comment field with animated character counter -->
+                    <div class="mb-4">
+                        <label for="id_comment" class="form-label">Your comments (optional)</label>
+                        <textarea name="comment" id="id_comment" class="form-control" rows="4"
+                                  x-model="comment"
+                                  placeholder="Tell us what you think..."></textarea>
+                        <div class="text-end small text-muted mt-1">
+                            <span x-text="comment.length"></span> / 500
+                        </div>
+                    </div>
+
+                    <!-- Submit button with loading state -->
+                    <div class="d-grid gap-2">
+                        <button type="submit"
+                                class="btn btn-primary btn-lg"
+                                :disabled="submitting"
+                                x-text="submitting ? 'Submitting...' : 'Submit Feedback'">
+                        </button>
+                    </div>
+                </form>
+
+                <div class="mt-4 text-center text-muted small">
+                    <i class="fas fa-lock"></i> Your feedback is anonymous and helps us improve.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Custom star button styling */
+    .star-btn {
+        background: none;
+        border: none;
+        color: #ddd;
+        cursor: pointer;
+        padding: 0;
+        transition: all 0.2s;
+    }
+    .star-btn.selected {
+        color: #ffc107;
+        transform: scale(1.1);
+    }
+    .star-btn:hover {
+        transform: scale(1.2);
+        color: #ffc107;
+    }
+
+    /* Fade-in animation */
+    .animate__animated {
+        animation-duration: 0.6s;
+    }
+    .animate__fadeInUp {
+        animation-name: fadeInUp;
+    }
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translate3d(0, 40px, 0);
+        }
+        to {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+    /* Spinner for loading */
+    .spinner {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+<script>
+    function feedbackForm() {
+        return {
+            rating: 0,
+            comment: '',
+            submitting: false,
+            async submitForm() {
+                if (this.rating === 0) {
+                    alert('Please select a rating.');
+                    return;
+                }
+                this.submitting = true;
+                // Optional: Add CSRF token handling – already included by Django's CSRF middleware
+                const form = document.querySelector('form');
+                const formData = new FormData(form);
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            // CSRF token will be automatically sent by browser because we use formData and same-origin
+                        }
+                    });
+                    if (response.ok) {
+                        // Show success message (if not redirected)
+                        const data = await response.json();
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            // fallback: reload or show message
+                            alert('Thank you for your feedback!');
+                            window.location.href = '/dashboard/';
+                        }
+                    } else {
+                        throw new Error('Submission failed');
+                    }
+                } catch (error) {
+                    console.error(error);
+                    alert('An error occurred. Please try again.');
+                    this.submitting = false;
+                }
+            }
+        };
+    }
+</script>
+{% endblock %}

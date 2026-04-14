@@ -1,0 +1,274 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-lg border-0 rounded-4">
+        <div class="card-header bg-primary text-white rounded-top-4">
+            <h3 class="mb-0"><i class="fas fa-chart-line me-2"></i>Historical Replay: {{ election.name }}</h3>
+        </div>
+        <div class="card-body p-4">
+            <p class="lead">Watch the vote accumulation over time. Each dot represents one vote cast.</p>
+
+            <!-- Controls -->
+            <div class="row g-3 align-items-center mb-4">
+                <div class="col-auto">
+                    <button id="playBtn" class="btn btn-success btn-lg px-4">
+                        <i class="fas fa-play"></i> Play
+                    </button>
+                </div>
+                <div class="col-auto">
+                    <button id="pauseBtn" class="btn btn-warning btn-lg px-4" disabled>
+                        <i class="fas fa-pause"></i> Pause
+                    </button>
+                </div>
+                <div class="col-auto">
+                    <button id="resetBtn" class="btn btn-secondary btn-lg px-4">
+                        <i class="fas fa-redo-alt"></i> Reset
+                    </button>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Speed (ms/vote)</label>
+                    <input type="range" id="speedSlider" class="form-range" min="20" max="500" step="10" value="100">
+                    <span id="speedValue" class="ms-2">100 ms</span>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="mb-3">
+                <div class="d-flex justify-content-between small">
+                    <span>Progress</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="progress" style="height: 12px;">
+                    <div id="progressBar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <canvas id="replayChart" width="800" height="400" style="max-width:100%; height:auto;"></canvas>
+
+            <!-- Stats Summary (optional) -->
+            <div class="mt-4 text-center text-muted">
+                <small>Votes are replayed in chronological order. Speed can be adjusted anytime.</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include Chart.js and Font Awesome -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+<script>
+    // ---------- DOM elements ----------
+    const playBtn = document.getElementById('playBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const speedSlider = document.getElementById('speedSlider');
+    const speedValue = document.getElementById('speedValue');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+
+    // ---------- State ----------
+    let replayData = [];           // array of { candidate_id, candidate_name, position_id, time }
+    let candidateMap = {};        // id -> { name, color (optional) }
+    let chart = null;
+    let currentIndex = 0;
+    let intervalId = null;
+    let isPlaying = false;
+
+    // ---------- Helper: fetch replay data and candidate names ----------
+    async function loadReplayData() {
+        // Fetch vote timeline
+        const timelineResp = await fetch(`{% url "replay_votes" election.id %}?json=1`);
+        const timeline = await timelineResp.json();  // expects list of { candidate_id, position_id, time }
+
+        if (!timeline.length) {
+            alert("No vote timeline available for this election.");
+            return false;
+        }
+
+        // Collect unique candidate IDs
+        const candidateIds = [...new Set(timeline.map(v => v.candidate))];
+
+        // Fetch candidate details (names) – you can adjust the endpoint
+        // Option 1: use a separate API (recommended)
+        let candidateNames = {};
+        try {
+            const candidatesResp = await fetch(`/election/${ {{ election.id }} }/candidates/json/`);
+            if (candidatesResp.ok) {
+                const candidatesData = await candidatesResp.json();
+                candidatesData.forEach(c => { candidateNames[c.id] = c.name; });
+            } else {
+                // Fallback: use IDs as names
+                candidateIds.forEach(id => { candidateNames[id] = `Candidate ${id}`; });
+            }
+        } catch (e) {
+            // Fallback
+            candidateIds.forEach(id => { candidateNames[id] = `Candidate ${id}`; });
+        }
+
+        // Build replayData with candidate name
+        replayData = timeline.map(vote => ({
+            candidate_id: vote.candidate,
+            candidate_name: candidateNames[vote.candidate] || `Candidate ${vote.candidate}`,
+            position_id: vote.position,
+            time: new Date(vote.time)
+        }));
+
+        // Build candidateMap for chart
+        candidateMap = {};
+        candidateIds.forEach(id => {
+            candidateMap[id] = {
+                name: candidateNames[id] || `Candidate ${id}`,
+                color: `hsl(${Math.random() * 360}, 70%, 50%)`
+            };
+        });
+
+        return true;
+    }
+
+    // ---------- Initialize chart ----------
+    function initChart() {
+        const ctx = document.getElementById('replayChart').getContext('2d');
+        const candidateIds = Object.keys(candidateMap);
+        const labels = candidateIds.map(id => candidateMap[id].name);
+        const initialData = new Array(candidateIds.length).fill(0);
+
+        chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Cumulative Votes',
+                    data: initialData,
+                    backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                    borderColor: '#28a745',
+                    borderWidth: 2,
+                    borderRadius: 6,
+                    barPercentage: 0.7
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Total Votes', font: { weight: 'bold' } },
+                        ticks: { precision: 0 }
+                    },
+                    x: {
+                        title: { display: true, text: 'Candidates', font: { weight: 'bold' } },
+                        ticks: { autoSkip: false, maxRotation: 45, minRotation: 45 }
+                    }
+                },
+                plugins: {
+                    tooltip: { callbacks: { label: (ctx) => `${ctx.raw} votes` } },
+                    legend: { display: false }
+                },
+                animation: false   // we update manually for smooth step-by-step
+            }
+        });
+    }
+
+    // ---------- Update chart with current cumulative counts ----------
+    function updateChart() {
+        if (!chart) return;
+        const candidateIds = Object.keys(candidateMap);
+        const counts = new Array(candidateIds.length).fill(0);
+        for (let i = 0; i < currentIndex; i++) {
+            const vote = replayData[i];
+            const idx = candidateIds.indexOf(vote.candidate_id.toString());
+            if (idx !== -1) counts[idx]++;
+        }
+        chart.data.datasets[0].data = counts;
+        chart.update();
+        // Update progress
+        const percent = (currentIndex / replayData.length) * 100;
+        progressBar.style.width = percent + '%';
+        progressPercent.innerText = Math.round(percent) + '%';
+    }
+
+    // ---------- Playback control ----------
+    function startReplay() {
+        if (intervalId) clearInterval(intervalId);
+        if (currentIndex >= replayData.length) {
+            resetReplay();
+        }
+        const speed = parseInt(speedSlider.value);
+        intervalId = setInterval(() => {
+            if (currentIndex < replayData.length) {
+                currentIndex++;
+                updateChart();
+                if (currentIndex === replayData.length) {
+                    // Replay finished
+                    clearInterval(intervalId);
+                    intervalId = null;
+                    isPlaying = false;
+                    playBtn.disabled = false;
+                    pauseBtn.disabled = true;
+                    // Optional browser notification
+                    if (Notification.permission === "granted") {
+                        new Notification("Replay completed", { body: `All ${replayData.length} votes have been replayed.` });
+                    }
+                }
+            } else {
+                clearInterval(intervalId);
+                intervalId = null;
+                isPlaying = false;
+                playBtn.disabled = false;
+                pauseBtn.disabled = true;
+            }
+        }, speed);
+        isPlaying = true;
+        playBtn.disabled = true;
+        pauseBtn.disabled = false;
+    }
+
+    function pauseReplay() {
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
+        isPlaying = false;
+        playBtn.disabled = false;
+        pauseBtn.disabled = true;
+    }
+
+    function resetReplay() {
+        pauseReplay();
+        currentIndex = 0;
+        updateChart();
+    }
+
+    // ---------- Speed slider display ----------
+    speedSlider.addEventListener('input', (e) => {
+        speedValue.innerText = e.target.value + ' ms';
+        if (isPlaying) {
+            // restart with new speed
+            startReplay();
+        }
+    });
+
+    // ---------- Event listeners ----------
+    playBtn.addEventListener('click', startReplay);
+    pauseBtn.addEventListener('click', pauseReplay);
+    resetBtn.addEventListener('click', resetReplay);
+
+    // ---------- Initialization ----------
+    async function init() {
+        const loaded = await loadReplayData();
+        if (!loaded) return;
+        initChart();
+        updateChart();  // initial zero state
+        // Request notification permission (optional)
+        if ("Notification" in window && Notification.permission !== "denied") {
+            Notification.requestPermission();
+        }
+    }
+
+    init();
+</script>
+{% endblock %}

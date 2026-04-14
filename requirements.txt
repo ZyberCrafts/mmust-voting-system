@@ -1,0 +1,25 @@
+django 
+psycopg2-binary 
+django-cryptography 
+djangorestframework 
+django-otp 
+celery
+redis
+pycryptodome
+pillow
+face_recognition
+numpy
+opencv-python
+requests
+python-dotenv
+gunicorn
+dlib --no-cache-dir
+qrcode
+channels 
+channels-redis
+django-webpush
+django-sslserver
+openai
+textblob
+daphne
+eventlet

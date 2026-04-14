@@ -1,0 +1,170 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row justify-content-center" x-data="loginForm()" x-init="init()">
+    <div class="col-md-5">
+        <div class="card shadow-lg border-0 rounded-4 animate__animated animate__fadeInUp">
+            <div class="card-header bg-primary text-white text-center py-4 rounded-top-4">
+                <h3 class="mb-0">🔐 Welcome Back</h3>
+                <p class="small mb-0">Sign in to your account</p>
+            </div>
+            <div class="card-body p-4">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                <form method="post" @submit.prevent="submitForm" id="loginForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Username or Email</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" name="username" id="username" class="form-control" required x-model="username" autocomplete="username" @blur="checkSecurityRequirement">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                            <input :type="passwordVisible ? 'text' : 'password'" name="password" id="password" class="form-control" required x-model="password" autocomplete="current-password">
+                            <button class="btn btn-outline-secondary" type="button" @click="togglePassword">
+                                <i :class="passwordVisible ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Security Question (always visible) -->
+                    <div class="mb-3">
+                        <label class="form-label" id="securityQuestionLabel">Security Question</label>
+                        <input type="text" name="security_answer" id="security_answer" class="form-control" placeholder="Your answer" autocomplete="off">
+                        <small class="text-muted" id="securityHint">Required only during voting period.</small>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="rememberMe" name="remember_me">
+                            <label class="form-check-label" for="rememberMe">Remember me</label>
+                        </div>
+                        <a href="{% url 'password_reset' %}" class="text-decoration-none small">Forgot password?</a>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 py-2" :disabled="loading || securityCheckPending">
+                        <span x-show="!loading">Login</span>
+                        <span x-show="loading" class="spinner-border spinner-border-sm" role="status"></span>
+                        <span x-show="loading"> Logging in...</span>
+                    </button>
+                </form>
+
+                <hr class="my-4">
+                <p class="text-center mb-0">Don't have an account? <a href="{% url 'register' %}" class="text-decoration-none fw-bold">Register now</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .animate__fadeInUp {
+        animation: fadeInUp 0.5s ease-out;
+    }
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 1rem 3rem rgba(0,0,0,.175)!important;
+    }
+    .input-group-text {
+        background-color: #f8f9fa;
+    }
+</style>
+
+<script>
+    function loginForm() {
+        return {
+            username: '',
+            password: '',
+            passwordVisible: false,
+            loading: false,
+            securityCheckPending: false,
+            securityRequired: false,
+            securityQuestion: '',
+            init() {
+                // On page load, if username already filled (e.g., after failed login), check requirement
+                const usernameField = document.getElementById('username');
+                if (usernameField && usernameField.value) {
+                    this.username = usernameField.value;
+                    this.checkSecurityRequirement();
+                }
+            },
+            togglePassword() {
+                this.passwordVisible = !this.passwordVisible;
+            },
+            async checkSecurityRequirement() {
+                if (!this.username) {
+                    this.securityRequired = false;
+                    this.securityQuestion = '';
+                    this.updateSecurityUI();
+                    return;
+                }
+                this.securityCheckPending = true;
+                try {
+                    const response = await fetch(`/api/login-status/?username=${encodeURIComponent(this.username)}`);
+                    const data = await response.json();
+                    if (data.error) {
+                        this.securityRequired = false;
+                        this.securityQuestion = '';
+                    } else {
+                        this.securityRequired = data.security_required;
+                        this.securityQuestion = data.question || '';
+                    }
+                } catch (err) {
+                    console.error('Error fetching login status:', err);
+                    this.securityRequired = false;
+                    this.securityQuestion = '';
+                } finally {
+                    this.securityCheckPending = false;
+                    this.updateSecurityUI();
+                }
+            },
+            updateSecurityUI() {
+                const label = document.getElementById('securityQuestionLabel');
+                const hint = document.getElementById('securityHint');
+                if (this.securityRequired && this.securityQuestion) {
+                    label.textContent = this.securityQuestion;
+                    hint.textContent = 'Required during voting period.';
+                } else {
+                    label.textContent = 'Security Question';
+                    hint.textContent = 'Not required at this time.';
+                }
+            },
+            async submitForm() {
+                // If security is required and answer is empty, prevent submission
+                if (this.securityRequired) {
+                    const answerField = document.getElementById('security_answer');
+                    if (!answerField.value.trim()) {
+                        alert('Please enter your security answer.');
+                        return;
+                    }
+                }
+                this.loading = true;
+                this.$el.submit();
+            }
+        };
+    }
+</script>
+{% endblock %}

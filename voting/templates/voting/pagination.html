@@ -1,0 +1,229 @@
+{% load static %}
+
+{% if page.has_other_pages %}
+<div x-data="paginationComponent({
+    currentPage: {{ page.number }},
+    totalPages: {{ page.paginator.num_pages }},
+    hasPrevious: {{ page.has_previous|yesno:"true,false" }},
+    hasNext: {{ page.has_next|yesno:"true,false" }},
+    previousPage: {% if page.has_previous %}{{ page.previous_page_number }}{% else %}null{% endif %},
+    nextPage: {% if page.has_next %}{{ page.next_page_number }}{% else %}null{% endif %},
+    ajaxUrl: '{{ ajax_url|default:"" }}',
+    containerId: '{{ container_id|default:"pagination-content" }}'
+})" x-init="init()" class="mt-4">
+    
+    <!-- Loading Overlay (hidden by default) -->
+    <div x-show="loading" x-cloak class="text-center py-3">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Pagination Controls with animations -->
+    <div x-show="!loading" x-transition.duration.300ms>
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center flex-wrap">
+                <!-- First Page -->
+                <li class="page-item" :class="{ disabled: currentPage == 1 }">
+                    <a class="page-link" href="#" @click.prevent="goToPage(1)" aria-label="First">
+                        <span aria-hidden="true">&laquo;&laquo;</span>
+                    </a>
+                </li>
+                <!-- Previous -->
+                <li class="page-item" :class="{ disabled: !hasPrevious }">
+                    <a class="page-link" href="#" @click.prevent="goToPage(previousPage)" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+
+                <!-- Dynamic page numbers with ellipsis -->
+                <template x-for="pageNum in pageRange" :key="pageNum">
+                    <li class="page-item" :class="{ active: pageNum == currentPage }">
+                        <a class="page-link" href="#" @click.prevent="goToPage(pageNum)" x-text="pageNum"></a>
+                    </li>
+                </template>
+
+                <!-- Next -->
+                <li class="page-item" :class="{ disabled: !hasNext }">
+                    <a class="page-link" href="#" @click.prevent="goToPage(nextPage)" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+                <!-- Last Page -->
+                <li class="page-item" :class="{ disabled: currentPage == totalPages }">
+                    <a class="page-link" href="#" @click.prevent="goToPage(totalPages)" aria-label="Last">
+                        <span aria-hidden="true">&raquo;&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Info and Export/Email Buttons (optional) -->
+        <div class="d-flex justify-content-between align-items-center mt-2 flex-wrap">
+            <small class="text-muted">
+                Page {{ currentPage }} of {{ totalPages }} ({{ page.paginator.count }} total items)
+            </small>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-sm btn-outline-primary" @click="shareCurrentPage()">
+                    📋 Share Page
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" @click="exportCurrentPageCSV()">
+                    📥 Export CSV
+                </button>
+                <!-- Email notification trigger (if user is logged in) -->
+                {% if user.is_authenticated %}
+                <button type="button" class="btn btn-sm btn-outline-info" @click="sendPageEmail()">
+                    ✉️ Email this page
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Inline CSS & Alpine.js (already in base.html, but re-include to be safe) -->
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+<style>
+    [x-cloak] { display: none !important; }
+    .pagination .page-item .page-link {
+        transition: all 0.2s ease-in-out;
+        border-radius: 0.25rem;
+        margin: 0 2px;
+    }
+    .pagination .page-item.active .page-link {
+        background-color: var(--mmust-blue, #0000FF);
+        border-color: var(--mmust-blue, #0000FF);
+        color: white;
+        transform: scale(1.05);
+    }
+    .pagination .page-item .page-link:hover {
+        transform: translateY(-2px);
+        background-color: var(--mmust-light-blue, #ADD8E6);
+    }
+    @media (max-width: 576px) {
+        .pagination .page-link { padding: 0.375rem 0.5rem; font-size: 0.8rem; }
+        .btn-group .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.7rem; }
+    }
+</style>
+
+<script>
+function paginationComponent(config) {
+    return {
+        currentPage: config.currentPage,
+        totalPages: config.totalPages,
+        hasPrevious: config.hasPrevious,
+        hasNext: config.hasNext,
+        previousPage: config.previousPage,
+        nextPage: config.nextPage,
+        ajaxUrl: config.ajaxUrl,
+        containerId: config.containerId,
+        loading: false,
+        
+        // Computed page range with ellipsis
+        get pageRange() {
+            const delta = 2; // number of pages to show on each side
+            let range = [];
+            let left = this.currentPage - delta;
+            let right = this.currentPage + delta;
+            for (let i = 1; i <= this.totalPages; i++) {
+                if (i == 1 || i == this.totalPages || (i >= left && i <= right)) {
+                    range.push(i);
+                }
+            }
+            // add ellipsis markers (represented as -1)
+            let final = [];
+            for (let i = 0; i < range.length; i++) {
+                if (i > 0 && range[i] - range[i-1] > 1) final.push('...');
+                final.push(range[i]);
+            }
+            return final;
+        },
+        
+        init() {
+            // Keyboard navigation: left/right arrows
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft' && this.hasPrevious) {
+                    e.preventDefault();
+                    this.goToPage(this.previousPage);
+                } else if (e.key === 'ArrowRight' && this.hasNext) {
+                    e.preventDefault();
+                    this.goToPage(this.nextPage);
+                }
+            });
+        },
+        
+        goToPage(pageNum) {
+            if (pageNum === this.currentPage || pageNum === '...') return;
+            if (this.ajaxUrl) {
+                // AJAX pagination: fetch new content
+                this.loading = true;
+                fetch(`${this.ajaxUrl}?page=${pageNum}`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => response.text())
+                .then(html => {
+                    const container = document.getElementById(this.containerId);
+                    if (container) container.innerHTML = html;
+                    // Update pagination state after successful fetch
+                    window.history.pushState({}, '', `?page=${pageNum}`);
+                    this.currentPage = pageNum;
+                    this.hasPrevious = pageNum > 1;
+                    this.hasNext = pageNum < this.totalPages;
+                    this.previousPage = pageNum - 1;
+                    this.nextPage = pageNum + 1;
+                    this.loading = false;
+                })
+                .catch(err => {
+                    console.error('Pagination AJAX error:', err);
+                    this.loading = false;
+                    // fallback to full page reload
+                    window.location.href = `?page=${pageNum}`;
+                });
+            } else {
+                // Traditional pagination: reload page with page parameter
+                window.location.href = `?page=${pageNum}`;
+            }
+        },
+        
+        shareCurrentPage() {
+            // Copy current page URL to clipboard
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', this.currentPage);
+            navigator.clipboard.writeText(url.toString());
+            alert('Link to this page copied to clipboard!');
+        },
+        
+        exportCurrentPageCSV() {
+            // Export current table/data as CSV (assumes table with class 'export-table')
+            const table = document.querySelector('.export-table');
+            if (!table) {
+                alert('No exportable table found on this page.');
+                return;
+            }
+            let csv = [];
+            const rows = table.querySelectorAll('tr');
+            for (let row of rows) {
+                const cells = row.querySelectorAll('td, th');
+                const rowData = Array.from(cells).map(cell => cell.innerText.trim());
+                csv.push(rowData.join(','));
+            }
+            const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `page_${this.currentPage}_data.csv`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        },
+        
+        sendPageEmail() {
+            // Trigger an email with current page data (requires backend endpoint)
+            // For simplicity, we'll open mailto with page info
+            const subject = `Voting System Data - Page ${this.currentPage}`;
+            const body = `View this page at: ${window.location.href}?page=${this.currentPage}`;
+            window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            // Alternatively, you could POST to a server endpoint that sends email.
+        }
+    }
+}
+</script>
+{% endif %}

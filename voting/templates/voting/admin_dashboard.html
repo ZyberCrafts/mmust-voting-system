@@ -1,0 +1,212 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-primary">Admin Dashboard</h2>
+        <div>
+            <span class="badge bg-primary">{{ active_election.name|default:"No Active Election" }}</span>
+        </div>
+    </div>
+
+    <!-- Stats Cards with Animated Counters -->
+    <div class="row mb-4" x-data="counterAnimator()" x-init="initCounters()">
+        <div class="col-md-3 mb-3">
+            <div class="card text-center shadow-sm border-0">
+                <div class="card-body">
+                    <i class="bi bi-people fs-1 text-primary"></i>
+                    <h3 class="mt-2" x-text="votersCount">{{ total_voters }}</h3>
+                    <p class="text-muted mb-0">Total Voters</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center shadow-sm border-0">
+                <div class="card-body">
+                    <i class="bi bi-person-badge fs-1 text-success"></i>
+                    <h3 class="mt-2" x-text="candidatesCount">{{ total_candidates }}</h3>
+                    <p class="text-muted mb-0">Verified Candidates</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center shadow-sm border-0">
+                <div class="card-body">
+                    <i class="bi bi-hourglass-split fs-1 text-warning"></i>
+                    <h3 class="mt-2" x-text="pendingCount">{{ pending_verifications }}</h3>
+                    <p class="text-muted mb-0">Pending Verifications</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center shadow-sm border-0">
+                <div class="card-body">
+                    <i class="bi bi-check-circle fs-1 text-info"></i>
+                    <h3 class="mt-2" x-text="votesCount">0</h3>
+                    <p class="text-muted mb-0">Votes Cast (Active Election)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Turnout Chart (if active election) -->
+    {% if active_election %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Live Turnout – {{ active_election.name }}</h5>
+        </div>
+        <div class="card-body">
+            <canvas id="turnoutChart" height="80"></canvas>
+            <div class="mt-2 text-center">
+                <span class="badge bg-success" id="turnoutPercent">0%</span> of voters have cast their vote.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Action Cards -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-light">
+                    <i class="bi bi-person-check"></i> User Management
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'verify_users' %}" class="btn btn-outline-primary mb-2 w-100">Verify Pending Users</a>
+                    <a href="{% url 'verify_candidate' 0 %}" class="btn btn-outline-secondary mb-2 w-100">Verify Candidates</a>
+                    <a href="{% url 'broadcast_notification' %}" class="btn btn-outline-info w-100">Broadcast Notification</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-light">
+                    <i class="bi bi-bar-chart"></i> Election Tools
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'live_map' active_election.id|default:1 %}" class="btn btn-outline-primary mb-2 w-100">Live Voter Map</a>
+                    <a href="{% url 'replay_votes' active_election.id|default:1 %}" class="btn btn-outline-secondary mb-2 w-100">Replay Voting Timeline</a>
+                    <a href="{% url 'tally_election' active_election.id|default:1 %}" class="btn btn-outline-success mb-2 w-100">Tally Results (Background)</a>
+                    <a href="{% url 'export_csv' active_election.id|default:1 %}" class="btn btn-outline-danger w-100">Export Results as CSV</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Tools & Audit Logs -->
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <i class="bi bi-envelope"></i> Test Notifications
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'test_email' %}" class="btn btn-outline-primary mb-2 w-100">Send Test Email</a>
+                    <a href="{% url 'test_sms' %}" class="btn btn-outline-primary w-100">Send Test SMS</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <i class="bi bi-clock-history"></i> Recent Audit Logs
+                </div>
+                <div class="card-header bg-light">
+                    <a href="{% url 'broadcast_log' %}" class="btn btn-info">View Broadcast Log</a>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    {% if recent_logs %}
+                        <ul class="list-group list-group-flush">
+                            {% for log in recent_logs %}
+                                <li class="list-group-item">
+                                    <strong>{{ log.user|default:"System" }}</strong><br>
+                                    <small class="text-muted">{{ log.action }}</small><br>
+                                    <small>{{ log.timestamp|date:"d/m/Y H:i" }}</small>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                        <a href="{% url 'audit_logs' %}" class="btn btn-link">View all logs</a>
+                    {% else %}
+                        <p class="text-muted">No recent logs.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="mt-4">
+        <a href="{% url 'export_voters_csv' %}" class="btn btn-info">Export Voters CSV</a>
+        <a href="{% url 'export_candidates_csv' %}" class="btn btn-info">Export Candidates CSV</a>
+        <a href="{% url 'export_audit_csv' %}" class="btn btn-info">Export Audit Logs CSV</a>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Alpine.js component for animated counters
+    function counterAnimator() {
+        return {
+            votersCount: 0,
+            candidatesCount: 0,
+            pendingCount: 0,
+            votesCount: 0,
+            initCounters() {
+                // Animate to target values
+                this.animateNumber('votersCount', {{ total_voters }});
+                this.animateNumber('candidatesCount', {{ total_candidates }});
+                this.animateNumber('pendingCount', {{ pending_verifications }});
+                this.animateNumber('votesCount', {{ votes_cast|default:0 }});
+            },
+            animateNumber(property, target) {
+                let current = 0;
+                const step = Math.ceil(target / 50);
+                const interval = setInterval(() => {
+                    current += step;
+                    if (current >= target) {
+                        this[property] = target;
+                        clearInterval(interval);
+                    } else {
+                        this[property] = current;
+                    }
+                }, 20);
+            }
+        };
+    }
+
+    // Live turnout chart (if active election)
+    {% if active_election %}
+    const electionId = {{ active_election.id }};
+    const totalVoters = {{ total_voters }};
+    const ctx = document.getElementById('turnoutChart').getContext('2d');
+    let turnoutChart;
+
+    function updateTurnout(data) {
+        const voted = data.voted || 0;
+        const turnout = ((voted / totalVoters) * 100).toFixed(1);
+        document.getElementById('turnoutPercent').innerText = turnout + '%';
+        if (turnoutChart) {
+            turnoutChart.data.datasets[0].data = [voted, totalVoters - voted];
+            turnoutChart.update();
+        } else {
+            turnoutChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Voted', 'Not Voted'],
+                    datasets: [{ data: [voted, totalVoters - voted], backgroundColor: ['#28a745', '#dc3545'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: true }
+            });
+        }
+    }
+
+    // WebSocket connection for live updates
+    const socket = new WebSocket(`ws://${window.location.host}/ws/admin/live/${electionId}/`);
+    socket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        updateTurnout(data);
+    };
+    socket.onopen = function() { console.log('WebSocket connected'); };
+    {% endif %}
+</script>
+{% endblock %}

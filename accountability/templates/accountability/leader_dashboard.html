@@ -1,0 +1,261 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4" x-data="dashboard()" x-init="init()">
+    <!-- Header with animations -->
+    <div class="row mb-4 animate__animated animate__fadeInDown">
+        <div class="col-12">
+            <h2 class="text-primary">
+                <i class="bi bi-bar-chart-steps me-2"></i>Your Performance Dashboard
+            </h2>
+            <p class="text-muted">Track how voters rate your manifesto promises.</p>
+        </div>
+    </div>
+
+    <!-- Leader info cards -->
+    <div class="row mb-4">
+        {% for winner in winners %}
+        <div class="col-md-6 mb-3 animate__animated animate__fadeInUp">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="rounded-circle bg-primary text-white p-3 me-3" style="width: 60px; height: 60px; text-align: center; line-height: 2.5;">
+                        <i class="bi bi-trophy-fill fs-1"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-1">{{ winner.user.get_full_name }}</h5>
+                        <p class="mb-0 text-muted">{{ winner.position.name }} – {{ winner.election.name }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Session filter (Alpine) -->
+    <div class="row mb-4 animate__animated animate__fadeInUp">
+        <div class="col-md-6">
+            <label class="form-label fw-bold">Filter by Rating Session</label>
+            <select class="form-select" x-model="selectedSession" @change="filterSessions">
+                <option value="">All Sessions</option>
+                <template x-for="s in sessions">
+                    <option :value="s.id" x-text="s.name"></option>
+                </template>
+            </select>
+        </div>
+        <div class="col-md-6 text-md-end mt-3 mt-md-0">
+            <button class="btn btn-outline-primary" @click="exportData">
+                <i class="bi bi-download"></i> Export Ratings (CSV)
+            </button>
+        </div>
+    </div>
+
+    <!-- Rating sessions cards -->
+    <div class="row">
+        <template x-for="session in filteredSessions" :key="session.id">
+            <div class="col-12 mb-4 animate__animated animate__fadeInUp" x-show="true" x-transition.duration.300ms>
+                <div class="card shadow border-0 overflow-hidden">
+                    <div class="card-header bg-gradient-primary text-white d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0" x-text="session.name"></h4>
+                        <span class="badge bg-light text-dark" x-text="new Date(session.start_date).toLocaleDateString() + ' – ' + new Date(session.end_date).toLocaleDateString()"></span>
+                    </div>
+                    <div class="card-body">
+                        <template x-for="item in session.items" :key="item.id">
+                            <div class="mb-4 p-3 rounded-3 border item-card">
+                                <div class="row align-items-start">
+                                    <div class="col-md-8">
+                                        <h5 class="fw-bold" x-text="item.description"></h5>
+                                        <div class="mt-2">
+                                            <span class="text-muted">Average rating: </span>
+                                            <span x-html="renderStars(item.avg_rating)"></span>
+                                            <span class="ms-2">(<span x-text="item.avg_rating.toFixed(1)"></span> / 5)</span>
+                                        </div>
+                                        <div class="mt-1">
+                                            <span class="text-muted">Total ratings: </span><strong x-text="item.count"></strong>
+                                        </div>
+                                        <!-- Progress bar (visual of avg rating) -->
+                                        <div class="progress mt-2" style="height: 8px;">
+                                            <div class="progress-bar bg-success" :style="`width: ${(item.avg_rating / 5) * 100}%`"></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mt-3 mt-md-0">
+                                        <canvas :id="`chart-${item.id}`" height="150" width="300"></canvas>
+                                    </div>
+                                </div>
+                                <!-- Comments collapse -->
+                                <div class="mt-3" x-show="item.comments.length > 0">
+                                    <button class="btn btn-sm btn-outline-secondary" @click="toggleComments(item.id)">
+                                        <i class="bi bi-chat-text me-1"></i> View Comments (<span x-text="item.comments.length"></span>)
+                                    </button>
+                                    <div :id="`comments-${item.id}`" class="collapse mt-2">
+                                        <div class="card card-body bg-light" style="max-height: 200px; overflow-y: auto;">
+                                            <div v-for="comment in item.comments" class="mb-2 border-bottom pb-2">
+                                                <i class="bi bi-quote"></i> “<span x-text="comment"></span>”
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <p x-show="session.items.length === 0" class="text-muted text-center">No ratings yet for this session.</p>
+                    </div>
+                </div>
+            </div>
+        </template>
+        <div x-show="filteredSessions.length === 0" class="col-12 text-center py-5">
+            <i class="bi bi-calendar-x fs-1 text-muted"></i>
+            <p class="mt-2">No rating sessions found.</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #007bff, #0056b3);
+    }
+    .item-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        background-color: var(--card-bg);
+        border-color: var(--border-color);
+    }
+    .item-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+    .star-rating i {
+        color: #ffc107;
+        font-size: 1rem;
+    }
+    .progress-bar {
+        transition: width 0.6s ease;
+    }
+    .animate__animated {
+        animation-duration: 0.5s;
+    }
+    @media (max-width: 768px) {
+        .item-card .row {
+            flex-direction: column;
+        }
+        .col-md-4 {
+            margin-top: 1rem;
+        }
+    }
+</style>
+
+<script>
+    function dashboard() {
+        return {
+            sessions: [],           // array of session objects (from Django)
+            filteredSessions: [],
+            selectedSession: '',
+
+            init() {
+                // Convert Django data to JavaScript objects
+                this.sessions = {{ sessions_json|safe }};
+                this.filteredSessions = [...this.sessions];
+                // Wait for DOM to render, then draw charts
+                this.$nextTick(() => {
+                    this.drawAllCharts();
+                });
+            },
+
+            filterSessions() {
+                if (!this.selectedSession) {
+                    this.filteredSessions = [...this.sessions];
+                } else {
+                    this.filteredSessions = this.sessions.filter(s => s.id == this.selectedSession);
+                }
+                this.$nextTick(() => {
+                    this.drawAllCharts();
+                });
+            },
+
+            drawAllCharts() {
+                // Destroy existing charts if any (avoid duplication)
+                if (window.charts) {
+                    Object.values(window.charts).forEach(chart => chart.destroy());
+                }
+                window.charts = {};
+                // Iterate over all items and create chart
+                this.filteredSessions.forEach(session => {
+                    session.items.forEach(item => {
+                        const canvasId = `chart-${item.id}`;
+                        const canvas = document.getElementById(canvasId);
+                        if (canvas && item.distribution) {
+                            const ctx = canvas.getContext('2d');
+                            window.charts[item.id] = new Chart(ctx, {
+                                type: 'bar',
+                                data: {
+                                    labels: ['1★', '2★', '3★', '4★', '5★'],
+                                    datasets: [{
+                                        label: 'Number of ratings',
+                                        data: item.distribution,
+                                        backgroundColor: '#28a745',
+                                        borderColor: '#1e7e34',
+                                        borderWidth: 1
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: true,
+                                    plugins: {
+                                        legend: { display: false },
+                                        tooltip: { callbacks: { label: (ctx) => `${ctx.raw} votes` } }
+                                    },
+                                    scales: {
+                                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                                    }
+                                }
+                            });
+                        }
+                    });
+                });
+            },
+
+            renderStars(rating) {
+                const fullStars = Math.floor(rating);
+                const halfStar = rating % 1 >= 0.5;
+                let stars = '';
+                for (let i = 0; i < fullStars; i++) stars += '<i class="bi bi-star-fill text-warning"></i>';
+                if (halfStar) stars += '<i class="bi bi-star-half text-warning"></i>';
+                for (let i = stars.length / (halfStar ? 2 : 1); i < 5; i++) stars += '<i class="bi bi-star text-warning"></i>';
+                return stars;
+            },
+
+            toggleComments(itemId) {
+                const el = document.getElementById(`comments-${itemId}`);
+                if (el) {
+                    const bsCollapse = new bootstrap.Collapse(el, { toggle: true });
+                }
+            },
+
+            exportData() {
+                // Simple CSV export of current filtered data
+                let csvRows = [];
+                csvRows.push(['Session', 'Item Description', 'Avg Rating', 'Total Ratings', 'Rating Distribution (1-5)']);
+                this.filteredSessions.forEach(session => {
+                    session.items.forEach(item => {
+                        csvRows.push([
+                            session.name,
+                            item.description,
+                            item.avg_rating.toFixed(2),
+                            item.count,
+                            item.distribution.join(',')
+                        ]);
+                    });
+                });
+                const csvContent = csvRows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'leader_ratings.csv');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }
+        };
+    }
+</script>
+{% endblock %}

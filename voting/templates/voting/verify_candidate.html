@@ -1,0 +1,228 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4" x-data="candidateVerification()">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-7">
+            <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+                <!-- Card Header with animation -->
+                <div class="card-header bg-primary text-white py-3">
+                    <h3 class="mb-0 fw-bold">
+                        <i class="bi bi-person-check-fill me-2"></i> Verify Candidate
+                    </h3>
+                    <p class="mb-0 small opacity-75">Review and update academic eligibility</p>
+                </div>
+
+                <!-- Candidate Info Preview -->
+                <div class="card-body p-4">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4 text-center">
+                            <div class="rounded-circle bg-light p-2 d-inline-block">
+                                {% if candidate.user.id_photo %}
+                                    <img src="{{ candidate.user.id_photo.url }}" alt="ID Photo" class="rounded-circle img-thumbnail" width="120" height="120">
+                                {% else %}
+                                    <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center" style="width:120px;height:120px;">
+                                        <i class="bi bi-person-fill text-white" style="font-size: 3rem;"></i>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <h5 class="mt-3">{{ candidate.user.get_full_name }}</h5>
+                            <span class="badge bg-secondary">{{ candidate.user.admission_number }}</span>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="card bg-light border-0">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-6"><strong>Position:</strong></div>
+                                        <div class="col-6">{{ candidate.position.name }}</div>
+                                        <div class="col-6"><strong>Party:</strong></div>
+                                        <div class="col-6">{{ candidate.party.name|default:"Independent" }}</div>
+                                        <div class="col-6"><strong>Election:</strong></div>
+                                        <div class="col-6">{{ candidate.election.name }}</div>
+                                        <div class="col-6"><strong>Submitted:</strong></div>
+                                        <div class="col-6">{{ candidate.created_at|date:"d M Y" }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Verification Form -->
+                    <form method="post" @submit.prevent="confirmVerification">
+                        {% csrf_token %}
+                        {{ form.non_field_errors }}
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Academic Verification</label>
+                            <div class="form-check">
+                                {{ form.verified }}
+                                <label class="form-check-label" for="{{ form.verified.id_for_label }}">
+                                    Verified (No missing marks or supp exams)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Issues (if any)</label>
+                            <div class="form-check">
+                                {{ form.missing_marks }}
+                                <label class="form-check-label" for="{{ form.missing_marks.id_for_label }}">
+                                    Has missing marks
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                {{ form.supplementary_exams }}
+                                <label class="form-check-label" for="{{ form.supplementary_exams.id_for_label }}">
+                                    Has supplementary exams
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- NEW: Fee clearance and document preview -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Financial Clearance</label>
+                            <div class="form-check">
+                                {{ form.has_cleared_fees }}
+                                <label class="form-check-label" for="{{ form.has_cleared_fees.id_for_label }}">
+                                    Candidate has cleared all fees (verified by finance)
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Display uploaded documents -->
+                        {% if candidate.party_nomination_certificate %}
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Party Nomination Certificate</label><br>
+                                <a href="{{ candidate.party_nomination_certificate.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-file-pdf"></i> View Certificate
+                                </a>
+                            </div>
+                        {% endif %}
+
+                        {% if candidate.fee_statement %}
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Fee Statement</label><br>
+                                <a href="{{ candidate.fee_statement.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-file-pdf"></i> View Statement
+                                </a>
+                            </div>
+                        {% endif %}
+
+                        <!-- Manifesto Preview -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Manifesto</label>
+                            <div class="border rounded p-3 bg-light">
+                                {{ candidate.manifesto|default:"No manifesto provided."|linebreaks }}
+                            </div>
+                        </div>
+
+                        <!-- Questionnaire Answers (if any) -->
+                        {% if candidate.questionnaire_answers %}
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Questionnaire Answers</label>
+                                <div class="border rounded p-3 bg-light">
+                                    {% for key, value in candidate.questionnaire_answers.items %}
+                                        <p><strong>Q{{ forloop.counter }}:</strong> {{ value }}</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary" onclick="history.back()">
+                                <i class="bi bi-arrow-left"></i> Cancel
+                            </button>
+                            <button type="submit" class="btn btn-success px-4">
+                                <i class="bi bi-check-circle"></i> Update Candidate
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal (Alpine) -->
+    <div x-show="showConfirmModal" class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);" @click.away="showConfirmModal = false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Confirm Verification</h5>
+                    <button type="button" class="btn-close btn-close-white" @click="showConfirmModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p>You are about to <strong>{% if form.verified.value %}verify{% else %}update{% endif %}</strong> the candidacy of <strong>{{ candidate.user.get_full_name }}</strong>.</p>
+                    <p>After submission, the candidate will receive an email/SMS notification (if configured).</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="showConfirmModal = false">Cancel</button>
+                    <button type="button" class="btn btn-success" @click="submitForm">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success/Error Toast (if messages) -->
+    {% if messages %}
+        <div class="toast-container position-fixed bottom-0 end-0 p-3">
+            {% for message in messages %}
+                <div class="toast align-items-center text-bg-{% if message.tags == 'success' %}success{% else %}danger{% endif %} border-0 show" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            {{ message }}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+
+<!-- Inline Alpine.js Logic -->
+<script>
+    function candidateVerification() {
+        return {
+            showConfirmModal: false,
+            confirmVerification() {
+                this.showConfirmModal = true;
+            },
+            submitForm() {
+                // Submit the form programmatically
+                document.querySelector('form').submit();
+            }
+        }
+    }
+</script>
+
+<!-- Additional inline styles -->
+<style>
+    .card-header {
+        background: linear-gradient(135deg, #0000FF 0%, #3a7bd5 100%);
+    }
+    .btn-success {
+        background-color: #28a745;
+        border: none;
+        transition: all 0.3s ease;
+    }
+    .btn-success:hover {
+        background-color: #1e7e34;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .form-check-input:checked {
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+    img.rounded-circle {
+        object-fit: cover;
+        border: 3px solid #fff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .modal.fade.show {
+        transition: opacity 0.3s ease;
+    }
+</style>
+{% endblock %}

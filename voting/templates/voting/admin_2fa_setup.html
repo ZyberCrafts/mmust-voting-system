@@ -1,0 +1,183 @@
+{% extends 'voting/base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow border-0 animate__animated animate__fadeInUp" style="border-radius: 20px; overflow: hidden;">
+            <div class="card-header bg-primary text-white text-center py-4">
+                <h3 class="mb-0">
+                    <i class="bi bi-shield-lock-fill me-2"></i> Two‑Factor Authentication Setup
+                </h3>
+                <p class="mb-0 mt-2 small opacity-75">Secure your admin account with an extra layer of protection</p>
+            </div>
+            <div class="card-body p-4" x-data="twoFactorApp()" x-init="initTimer(120)">
+                <!-- Step 1: QR Code -->
+                <div class="text-center mb-4" x-show="!showBackupCodes">
+                    <p class="text-muted mb-3">Scan the QR code below with <strong>Google Authenticator</strong> or any TOTP app</p>
+                    <div class="qr-container d-inline-block p-3 bg-light rounded-4 shadow-sm" style="transition: all 0.3s ease;">
+                        <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code" class="img-fluid" style="max-width: 200px; border-radius: 12px;">
+                    </div>
+                    <p class="text-muted mt-3 small">
+                        <i class="bi bi-info-circle-fill me-1"></i> Code validity: <strong>2 minutes</strong>
+                    </p>
+                    <button class="btn btn-sm btn-outline-secondary mt-2" @click="regenerateQR">
+                        <i class="bi bi-arrow-repeat me-1"></i> Regenerate QR Code
+                    </button>
+                </div>
+
+                <!-- Step 2: Code Entry & Countdown -->
+                <form method="post" @submit="startLoading" x-show="!showBackupCodes">
+                    {% csrf_token %}
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">6‑Digit Code</label>
+                        <div class="input-group">
+                            <input type="text" name="token" class="form-control form-control-lg text-center" 
+                                   placeholder="000000" maxlength="6" pattern="\d{6}" required
+                                   x-model="code" @input="code = code.replace(/[^0-9]/g, '')">
+                            <span class="input-group-text bg-primary text-white" style="cursor: pointer;" 
+                                  @click="resetTimer(120)" title="Refresh (simulated)">⟳</span>
+                        </div>
+                        <div class="form-text text-muted mt-2">
+                            <i class="bi bi-hourglass-split me-1"></i> Code expires in 
+                            <span x-text="timer" class="fw-bold" :class="{'text-danger': timer <= 10}"></span> seconds
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100" :disabled="loading">
+                        <span x-show="!loading">Activate 2FA</span>
+                        <span x-show="loading" class="spinner-border spinner-border-sm me-2"></span> Activating...
+                    </button>
+                </form>
+
+                <!-- Backup Codes (placeholder) -->
+                <div x-show="showBackupCodes" x-transition.duration.300ms class="mt-4">
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill me-2"></i> Two‑Factor Authentication successfully enabled!
+                    </div>
+                    <div class="card bg-light border-0">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-file-text-fill me-2"></i> Backup Codes</h5>
+                            <p class="small">Store these codes in a safe place. Each code can be used only once.</p>
+                            <div class="backup-codes bg-white p-3 rounded font-monospace text-center" style="letter-spacing: 2px;">
+                                {% for code in backup_codes %}
+                                    <div>{{ code }}</div>
+                                {% empty %}
+                                    <div class="text-muted">(Backup codes will appear after activation)</div>
+                                {% endfor %}
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary mt-3" @click="copyBackupCodes">
+                                <i class="bi bi-copy me-1"></i> Copy Codes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional help -->
+                <div class="mt-4 text-center small text-muted">
+                    <i class="bi bi-phone-fill me-1"></i> Don't have Google Authenticator? 
+                    <a href="#" data-bs-toggle="modal" data-bs-target="#helpModal">Other compatible apps</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Help Modal -->
+<div class="modal fade" id="helpModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-question-circle-fill me-2"></i> TOTP Apps</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>You can use any TOTP‑compatible app, including:</p>
+                <ul>
+                    <li>Google Authenticator</li>
+                    <li>Microsoft Authenticator</li>
+                    <li>Authy</li>
+                    <li>FreeOTP</li>
+                    <li>Bitwarden (built‑in)</li>
+                </ul>
+                <p class="mb-0 small text-muted">After scanning the QR, enter the 6‑digit code to activate.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function twoFactorApp() {
+        return {
+            timer: 120,
+            interval: null,
+            loading: false,
+            code: '',
+            showBackupCodes: false,
+            initTimer(seconds) {
+                if (this.interval) clearInterval(this.interval);
+                this.timer = seconds;
+                this.interval = setInterval(() => {
+                    if (this.timer > 0) {
+                        this.timer--;
+                    } else {
+                        clearInterval(this.interval);
+                        alert("Code expired. Please regenerate the QR code or refresh the page.");
+                    }
+                }, 1000);
+            },
+            resetTimer(seconds) {
+                this.initTimer(seconds);
+            },
+            regenerateQR() {
+                // Reload the page with ?regenerate=true to force new QR code
+                window.location.href = window.location.pathname + '?regenerate=true';
+            },
+            startLoading() {
+                this.loading = true;
+                // Actual form submit will handle; just visual feedback
+                setTimeout(() => { this.loading = false; }, 2000);
+            },
+            copyBackupCodes() {
+                const codes = document.querySelector('.backup-codes');
+                if (codes) {
+                    const text = codes.innerText;
+                    navigator.clipboard.writeText(text).then(() => {
+                        alert('Backup codes copied to clipboard!');
+                    });
+                }
+            }
+        };
+    }
+</script>
+
+<style>
+    .animate__animated.animate__fadeInUp {
+        animation-duration: 0.5s;
+    }
+    .qr-container {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .qr-container:hover {
+        transform: scale(1.02);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+    .backup-codes {
+        word-break: break-all;
+        line-height: 2.2;
+    }
+    .backup-codes div {
+        padding: 4px 0;
+        border-bottom: 1px dashed #dee2e6;
+    }
+    .backup-codes div:last-child {
+        border-bottom: none;
+    }
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.6; }
+        100% { opacity: 1; }
+    }
+    .text-danger {
+        animation: pulse 1s infinite;
+    }
+</style>
+{% endblock %}

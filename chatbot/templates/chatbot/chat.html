@@ -1,0 +1,283 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-lg border-0">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">
+                <i class="fas fa-robot me-2"></i> MMUST Voting Assistant
+            </h4>
+            <button class="btn btn-sm btn-light" id="clear-chat" title="Clear chat">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+        <div class="card-body p-0" style="height: 500px; overflow-y: auto;" id="chat-box">
+            <div class="p-3" id="chat-messages">
+                {% for msg in messages %}
+                    <div class="mb-3 {% if msg.is_bot %}text-start{% else %}text-end{% endif %}">
+                        <div class="d-inline-block p-3 rounded-3 shadow-sm {% if msg.is_bot %}bg-light text-dark{% else %}bg-primary text-white{% endif %}" style="max-width: 75%;">
+                            {{ msg.message|linebreaksbr }}
+                        </div>
+                        <div class="small text-muted mt-1">
+                            {{ msg.timestamp|date:"H:i" }}
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="text-center text-muted py-5">
+                        <i class="fas fa-comment-dots fa-3x mb-3"></i>
+                        <p>Ask me anything about voting!<br>I can help with registration, voting, candidates, and results.</p>
+                    </div>
+                {% endfor %}
+                <div id="typing-indicator" class="text-start mb-3" style="display: none;">
+                    <div class="d-inline-block bg-light p-2 rounded-3">
+                        <i class="fas fa-ellipsis-h me-1"></i> Assistant is typing...
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="input-group">
+                <input type="text" class="form-control" id="chat-input" placeholder="Type your message..." autocomplete="off">
+                <button class="btn btn-primary" id="send-btn">
+                    <i class="fas fa-paper-plane"></i> Send
+                </button>
+            </div>
+
+            <!-- Static suggestion chips (original) -->
+            <div class="mt-3 d-flex flex-wrap gap-2 justify-content-center">
+                <button class="btn btn-sm btn-outline-secondary suggestion-chip" data-message="How do I register?">
+                    <i class="fas fa-user-plus me-1"></i> Register
+                </button>
+                <button class="btn btn-sm btn-outline-secondary suggestion-chip" data-message="Who are the candidates?">
+                    <i class="fas fa-users me-1"></i> Candidates
+                </button>
+                <button class="btn btn-sm btn-outline-secondary suggestion-chip" data-message="How do I vote?">
+                    <i class="fas fa-vote-yea me-1"></i> How to vote
+                </button>
+                <button class="btn btn-sm btn-outline-secondary suggestion-chip" data-message="What's the live turnout?">
+                    <i class="fas fa-chart-line me-1"></i> Live turnout
+                </button>
+                <button class="btn btn-sm btn-outline-secondary suggestion-chip" data-message="Show me the latest results">
+                    <i class="fas fa-poll me-1"></i> Results
+                </button>
+            </div>
+
+            <!-- Dynamic suggested questions from backend -->
+            {% if suggested_questions %}
+            <div class="mt-3">
+                <div class="small text-muted mb-2"><i class="fas fa-lightbulb"></i> Suggested questions:</div>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for q in suggested_questions %}
+                        <button class="btn btn-sm btn-outline-secondary suggested-question" data-question="{{ q }}">
+                            {{ q }}
+                        </button>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="mt-2 small text-muted text-center">
+                <i class="fas fa-info-circle"></i> You can ask about: election dates, candidates, how to vote, live turnout, results.
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Custom animations */
+    .mb-3 {
+        animation: slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    #chat-box {
+        scroll-behavior: smooth;
+    }
+    .suggestion-chip:hover,
+    .suggested-question:hover {
+        background-color: #e9ecef;
+        transform: translateY(-1px);
+        transition: all 0.2s;
+    }
+    .typing-indicator {
+        display: inline-block;
+    }
+    .typing-dots {
+        display: inline-block;
+        font-size: 1.2rem;
+        letter-spacing: 2px;
+        animation: blink 1.4s infinite;
+    }
+    @keyframes blink {
+        0%, 100% { opacity: 0; }
+        50% { opacity: 1; }
+    }
+</style>
+
+{% block extra_js %}
+<script src="https://kit.fontawesome.com/a1b2c3d4e5.js" crossorigin="anonymous"></script>  <!-- Replace with your FontAwesome kit or use free CDN -->
+<script>
+    // DOM elements
+    const chatBox = document.getElementById('chat-box');
+    const messagesContainer = document.getElementById('chat-messages');
+    const input = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const clearBtn = document.getElementById('clear-chat');
+    const typingIndicator = document.getElementById('typing-indicator');
+
+    // Helper: Escape HTML to prevent XSS
+    function escapeHtml(unsafe) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Add a message to the chat
+    function addMessage(text, isBot, timestamp = null) {
+        const div = document.createElement('div');
+        div.className = `mb-3 ${isBot ? 'text-start' : 'text-end'}`;
+        const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+        div.innerHTML = `
+            <div class="d-inline-block p-3 rounded-3 shadow-sm ${isBot ? 'bg-light text-dark' : 'bg-primary text-white'}" style="max-width: 75%;">
+                ${isBot ? text : escapeHtml(text)}
+            </div>
+            <div class="small text-muted mt-1">${time}</div>
+        `;
+        messagesContainer.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // Show/hide typing indicator
+    function setTyping(typing) {
+        typingIndicator.style.display = typing ? 'block' : 'none';
+        if (typing) chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // Send message to backend
+    async function sendMessage(message = null) {
+        const msg = message !== null ? message : input.value.trim();
+        if (!msg) return;
+
+        // Disable input while sending
+        input.disabled = true;
+        sendBtn.disabled = true;
+
+        // Add user message
+        addMessage(msg, false);
+        input.value = '';
+        setTyping(true);
+
+        // Get session cookie
+        const sessionId = getCookie('chat_session');
+        let userId = null;
+        {% if user.is_authenticated %}
+        userId = {{ user.id }};
+        {% endif %}
+
+        try {
+            const response = await fetch('/chatbot/api/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: msg,
+                    session_id: sessionId,
+                    user_id: userId
+                })
+            });
+            const data = await response.json();
+            setTyping(false);
+            if (data.response) {
+                addMessage(data.response, true);
+            } else {
+                addMessage('Sorry, I encountered an error. Please try again.', true);
+            }
+        } catch (error) {
+            console.error('Chat error:', error);
+            setTyping(false);
+            addMessage('Network error. Please check your connection.', true);
+        } finally {
+            input.disabled = false;
+            sendBtn.disabled = false;
+            input.focus();
+        }
+    }
+
+    // Clear chat (keeps session, just clears DOM)
+    function clearChat() {
+        messagesContainer.innerHTML = '';
+        // Add a placeholder
+        const placeholder = document.createElement('div');
+        placeholder.className = 'text-center text-muted py-5';
+        placeholder.innerHTML = '<i class="fas fa-comment-dots fa-3x mb-3"></i><p>Chat cleared. Ask me anything!</p>';
+        messagesContainer.appendChild(placeholder);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // Get cookie value
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
+    }
+
+    // Optional: fetch live turnout and add as a message
+    async function fetchLiveTurnout() {
+        try {
+            const res = await fetch('/api/live-turnout/');
+            const data = await res.json();
+            if (data.turnout !== undefined) {
+                addMessage(`Current turnout: ${data.voted}/${data.total_voters} (${data.turnout}%)`, true);
+            } else {
+                addMessage('Live turnout data is not available right now.', true);
+            }
+        } catch (err) {
+            addMessage('Could not fetch live turnout. Please try again later.', true);
+        }
+    }
+
+    // Event listeners
+    sendBtn.addEventListener('click', () => sendMessage());
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    clearBtn.addEventListener('click', clearChat);
+
+    // Static suggestion chips
+    document.querySelectorAll('.suggestion-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const message = chip.getAttribute('data-message');
+            if (message) sendMessage(message);
+        });
+    });
+
+    // Dynamic suggested questions (if they exist)
+    document.querySelectorAll('.suggested-question').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const question = btn.getAttribute('data-question');
+            if (question) sendMessage(question);
+        });
+    });
+
+    // Auto-focus input on page load
+    input.focus();
+    // Scroll to bottom of existing messages
+    chatBox.scrollTop = chatBox.scrollHeight;
+</script>
+{% endblock extra_js %}
+{% endblock %}

@@ -1,0 +1,188 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Candidate Profile Card -->
+    <div class="card shadow-lg border-0 overflow-hidden animate__animated animate__fadeInUp" 
+         style="border-radius: 20px; transition: transform 0.3s ease;">
+        <!-- Cover Image (Gradient) -->
+        <div class="card-header text-white text-center p-5" 
+             style="background: linear-gradient(135deg, var(--mmust-blue) 0%, #4a6fff 100%); border-radius: 20px 20px 0 0;">
+            <h1 class="display-4 fw-bold">{{ candidate.user.get_full_name }}</h1>
+            <p class="lead">{{ candidate.position.name }}</p>
+            {% if candidate.party %}
+                <span class="badge" style="background-color: {{ candidate.party.color }};">{{ candidate.party.name }}</span>
+            {% else %}
+                <span class="badge bg-secondary">Independent</span>
+            {% endif %}
+        </div>
+
+        <div class="card-body p-4">
+            <div class="row">
+                <!-- Profile Image Column -->
+                <div class="col-md-4 text-center">
+                    <div class="position-relative d-inline-block">
+                        <img src="{{ candidate.user.id_photo.url }}" 
+                             class="img-fluid rounded-circle shadow-lg" 
+                             style="width: 200px; height: 200px; object-fit: cover; border: 5px solid white;"
+                             onerror="this.onerror=null; this.src='{% static 'voting/images/default-avatar.png' %}';">
+                        <div class="position-absolute bottom-0 end-0 bg-success rounded-circle p-2 border border-white" style="width: 40px; height: 40px;">
+                            <i class="fas fa-check-circle text-white"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        {% if vote_count is not None %}
+                            <h3 class="text-primary">{{ vote_count }} votes</h3>
+                            <p class="text-muted">Total votes received</p>
+                        {% else %}
+                            <div class="alert alert-info">Vote counting in progress...</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Details Column -->
+                <div class="col-md-8">
+                    <h4 class="border-bottom pb-2">Manifesto</h4>
+                    <div class="manifesto-content mb-4" style="white-space: pre-line;">{{ candidate.manifesto|linebreaks }}</div>
+
+                    {% if candidate.campaign_video %}
+                        <h4 class="border-bottom pb-2">Campaign Video</h4>
+                        <div class="ratio ratio-16x9 mb-4">
+                            <iframe src="{{ candidate.campaign_video }}" allowfullscreen></iframe>
+                        </div>
+                    {% endif %}
+
+                    <!-- Social Sharing & Support -->
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-outline-primary" @click="share('facebook')">
+                                <i class="fab fa-facebook-f"></i> Share
+                            </button>
+                            <button class="btn btn-outline-info" @click="share('twitter')">
+                                <i class="fab fa-twitter"></i> Tweet
+                            </button>
+                            <button class="btn btn-outline-success" @click="share('whatsapp')">
+                                <i class="fab fa-whatsapp"></i> WhatsApp
+                            </button>
+                        </div>
+                        <div x-data="{ liked: false, likes: {{ candidate.likes|default:0 }} }">
+                            <button class="btn btn-danger" @click="liked = !liked; if(liked) likes++; else likes--; $dispatch('like-update', {candidate_id: {{ candidate.id }}, increment: liked ? 1 : -1})">
+                                <i class="fas fa-heart" :class="liked ? 'text-white' : 'text-danger'"></i>
+                                <span x-text="likes"></span> Likes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Related Candidates Section -->
+    {% if related_candidates %}
+    <div class="mt-5">
+        <h3 class="text-center mb-4">Other Candidates for {{ candidate.position.name }}</h3>
+        <div class="row">
+            {% for rel in related_candidates %}
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100 shadow-sm hover-scale">
+                        <img src="{{ rel.user.id_photo.url }}" class="card-img-top" style="height: 200px; object-fit: cover;" onerror="this.src='{% static 'voting/images/default-avatar.png' %}';">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">{{ rel.user.get_full_name }}</h5>
+                            <p class="card-text">{{ rel.party.name|default:"Independent" }}</p>
+                            <a href="{% url 'candidate_profile' candidate_id=rel.id %}" class="btn btn-sm btn-outline-primary">View Profile</a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal for Share Options -->
+<div class="modal fade" id="shareModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Share Candidate Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p>Share via:</p>
+                <div class="d-flex justify-content-around">
+                    <a href="#" id="facebookShare" target="_blank" class="btn btn-outline-primary"><i class="fab fa-facebook-f"></i> Facebook</a>
+                    <a href="#" id="twitterShare" target="_blank" class="btn btn-outline-info"><i class="fab fa-twitter"></i> Twitter</a>
+                    <a href="#" id="whatsappShare" target="_blank" class="btn btn-outline-success"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Custom animations */
+    .hover-scale {
+        transition: transform 0.3s ease;
+    }
+    .hover-scale:hover {
+        transform: translateY(-5px);
+    }
+    .animate__animated {
+        animation-duration: 0.8s;
+    }
+    .manifesto-content {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 10px;
+    }
+    .btn-group .btn {
+        margin: 0 5px;
+    }
+    @media (max-width: 768px) {
+        .col-md-4 {
+            text-align: center;
+        }
+        .btn-group {
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .btn-group .btn {
+            margin-bottom: 10px;
+        }
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('share', () => ({
+            share(platform) {
+                const url = encodeURIComponent(window.location.href);
+                const text = encodeURIComponent(`Check out ${document.title}!`);
+                let shareUrl = '';
+                if (platform === 'facebook') {
+                    shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+                } else if (platform === 'twitter') {
+                    shareUrl = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
+                } else if (platform === 'whatsapp') {
+                    shareUrl = `https://wa.me/?text=${text} ${url}`;
+                }
+                window.open(shareUrl, '_blank', 'width=600,height=400');
+            }
+        }));
+    });
+
+    // Like button AJAX (if needed)
+    document.addEventListener('like-update', (e) => {
+        fetch('/api/candidate/like/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ candidate_id: e.detail.candidate_id, increment: e.detail.increment })
+        });
+    });
+</script>
+{% endblock %}

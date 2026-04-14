@@ -1,0 +1,298 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    /* Audit logs specific styles */
+    .audit-container {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+        transition: all 0.3s ease;
+    }
+    .audit-header {
+        border-bottom: 2px solid #e9ecef;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    .audit-title {
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: #0000FF;
+        margin: 0;
+        position: relative;
+    }
+    .audit-title:after {
+        content: '';
+        position: absolute;
+        bottom: -8px;
+        left: 0;
+        width: 50px;
+        height: 3px;
+        background: #28a745;
+        border-radius: 2px;
+    }
+    .search-box {
+        max-width: 300px;
+        width: 100%;
+        position: relative;
+    }
+    .search-box input {
+        border-radius: 30px;
+        padding-left: 2.5rem;
+        transition: all 0.2s;
+    }
+    .search-box i {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        pointer-events: none;
+    }
+    .export-btn {
+        background: #28a745;
+        border: none;
+        border-radius: 30px;
+        padding: 0.5rem 1.2rem;
+        transition: transform 0.2s, background 0.2s;
+    }
+    .export-btn:hover {
+        background: #218838;
+        transform: scale(1.02);
+    }
+    .table-audit {
+        margin-bottom: 0;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .table-audit thead {
+        background: #f8f9fa;
+    }
+    .table-audit th {
+        font-weight: 600;
+        color: #495057;
+        border-bottom: 2px solid #dee2e6;
+        cursor: pointer;
+        user-select: none;
+    }
+    .table-audit td {
+        vertical-align: middle;
+        transition: background 0.2s;
+    }
+    .table-audit tr:hover td {
+        background: #f1f3f5;
+    }
+    .badge-action {
+        background: #e9ecef;
+        color: #495057;
+        font-weight: 500;
+        padding: 0.35em 0.65em;
+        border-radius: 30px;
+        font-size: 0.85rem;
+        display: inline-block;
+    }
+    .no-logs {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .audit-row {
+        animation: fadeIn 0.3s ease-out;
+    }
+    @media (max-width: 768px) {
+        .audit-header {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .search-box {
+            max-width: 100%;
+        }
+        .table-audit thead {
+            display: none;
+        }
+        .table-audit tbody tr {
+            display: block;
+            margin-bottom: 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 12px;
+            padding: 0.75rem;
+        }
+        .table-audit tbody td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            border: none;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .table-audit tbody td:before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #0000FF;
+            margin-right: 1rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="audit-container animate__animated animate__fadeIn">
+        <div class="audit-header">
+            <h1 class="audit-title">Audit Logs</h1>
+            <div class="d-flex gap-2">
+                <div class="search-box">
+                    <i class="bi bi-search"></i>
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search by user, action, IP...">
+                </div>
+                <button class="btn export-btn text-white" id="exportCsv">
+                    <i class="bi bi-download"></i> Export CSV
+                </button>
+            </div>
+        </div>
+
+        <!-- Table container for AJAX pagination -->
+        <div id="audit-logs-container">
+            {% include 'voting/audit_logs_table.html' with logs=logs %}
+        </div>
+
+        <!-- AJAX-enabled pagination -->
+        {% include 'voting/pagination.html' with page=logs ajax_url="/audit-logs/" container_id="audit-logs-container" %}
+    </div>
+</div>
+
+<script>
+    // Live search filtering (works with AJAX-loaded table as well)
+    function attachSearchListener() {
+        const searchInput = document.getElementById('searchInput');
+        if (!searchInput) return;
+        // Remove any existing listener to avoid duplicates
+        const newSearch = searchInput.cloneNode(true);
+        searchInput.parentNode.replaceChild(newSearch, searchInput);
+        newSearch.addEventListener('keyup', function() {
+            const filter = this.value.toLowerCase();
+            const tbody = document.querySelector('#audit-logs-container tbody');
+            if (!tbody) return;
+            const rows = tbody.querySelectorAll('tr');
+            rows.forEach(row => {
+                if (row.cells && row.cells.length > 0) {
+                    const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+                    if (text.includes(filter)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                } else if (row.classList.contains('no-logs')) {
+                    // keep empty message
+                }
+            });
+            // Show "no results" if all rows hidden
+            const visibleRows = Array.from(rows).filter(r => r.style.display !== 'none');
+            if (visibleRows.length === 0 && rows.length > 0) {
+                if (!document.getElementById('noResultsMsg')) {
+                    const noResults = document.createElement('tr');
+                    noResults.id = 'noResultsMsg';
+                    noResults.innerHTML = '<td colspan="4" class="text-center text-muted py-3">No matching logs found.</td>';
+                    tbody.appendChild(noResults);
+                }
+            } else {
+                const noResults = document.getElementById('noResultsMsg');
+                if (noResults) noResults.remove();
+            }
+        });
+    }
+
+    // Table sorting (client-side) – reattach after AJAX load
+    function attachSorting() {
+        const headers = document.querySelectorAll('#audit-logs-container th');
+        headers.forEach(header => {
+            // Remove existing listeners
+            const newHeader = header.cloneNode(true);
+            header.parentNode.replaceChild(newHeader, header);
+            newHeader.addEventListener('click', () => {
+                const sortBy = newHeader.getAttribute('data-sort');
+                if (!sortBy) return;
+                const isAsc = newHeader.classList.contains('asc');
+                // Remove all sort classes
+                headers.forEach(h => h.classList.remove('asc', 'desc'));
+                newHeader.classList.add(isAsc ? 'desc' : 'asc');
+                const tbody = document.querySelector('#audit-logs-container tbody');
+                if (!tbody) return;
+                const rows = Array.from(tbody.querySelectorAll('tr')).filter(r => r.cells);
+                const direction = isAsc ? -1 : 1;
+                rows.sort((a, b) => {
+                    let aVal = a.cells[newHeader.cellIndex].textContent.trim().toLowerCase();
+                    let bVal = b.cells[newHeader.cellIndex].textContent.trim().toLowerCase();
+                    if (sortBy === 'timestamp') {
+                        aVal = new Date(a.cells[newHeader.cellIndex].textContent);
+                        bVal = new Date(b.cells[newHeader.cellIndex].textContent);
+                        return direction * (aVal - bVal);
+                    }
+                    return direction * aVal.localeCompare(bVal);
+                });
+                rows.forEach(row => tbody.appendChild(row));
+            });
+        });
+    }
+
+    // Export CSV (works with current visible rows)
+    document.getElementById('exportCsv').addEventListener('click', function() {
+        const tbody = document.querySelector('#audit-logs-container tbody');
+        if (!tbody) return;
+        const rows = tbody.querySelectorAll('tr');
+        const csvData = [];
+        csvData.push(['User', 'Action', 'IP Address', 'Timestamp']);
+        rows.forEach(row => {
+            if (row.cells) {
+                const rowData = [];
+                for (let i = 0; i < row.cells.length; i++) {
+                    let text = row.cells[i].textContent.trim();
+                    text = text.replace(/"/g, '""');
+                    rowData.push(`"${text}"`);
+                }
+                if (rowData.length === 4) {
+                    csvData.push(rowData);
+                }
+            }
+        });
+        const csvContent = csvData.map(row => row.join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'audit_logs.csv');
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    });
+
+    // Initialize listeners on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        attachSearchListener();
+        attachSorting();
+    });
+
+    // Reattach listeners after AJAX pagination updates
+    document.addEventListener('ajax-pagination-updated', function() {
+        attachSearchListener();
+        attachSorting();
+    });
+</script>
+
+<!-- Bootstrap Icons CDN -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+{% endblock %}

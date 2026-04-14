@@ -1,0 +1,274 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block extra_js %}
+<!-- Alpine.js will be loaded from base.html, but we can add additional scripts if needed -->
+{% endblock %}
+
+{% block content %}
+<div class="container py-5" x-data="faqApp()" x-init="init()">
+    <!-- Header with animation -->
+    <div class="text-center mb-5 animate__animated animate__fadeInDown">
+        <h1 class="text-primary mb-3">
+            <i class="fas fa-question-circle me-2"></i>Frequently Asked Questions
+        </h1>
+        <p class="lead">Find answers to common questions about the MMUST Voting System</p>
+    </div>
+
+    <!-- Search and Filter Bar -->
+    <div class="row mb-4">
+        <div class="col-md-8 mx-auto">
+            <div class="input-group shadow-sm">
+                <span class="input-group-text bg-primary text-white"><i class="fas fa-search"></i></span>
+                <input type="text" class="form-control" x-model="searchTerm" @input="filterFaqs()" placeholder="Search by question or answer...">
+                <button class="btn btn-outline-secondary" @click="searchTerm = ''; filterFaqs()" x-show="searchTerm" type="button">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="row mb-4">
+        <div class="col-md-10 mx-auto">
+            <ul class="nav nav-pills justify-content-center gap-2">
+                <li class="nav-item">
+                    <button class="btn" :class="currentCategory === 'all' ? 'btn-primary' : 'btn-outline-primary'" @click="setCategory('all')">
+                        <i class="fas fa-globe me-1"></i>All
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="btn" :class="currentCategory === 'registration' ? 'btn-primary' : 'btn-outline-primary'" @click="setCategory('registration')">
+                        <i class="fas fa-user-plus me-1"></i>Registration
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="btn" :class="currentCategory === 'voting' ? 'btn-primary' : 'btn-outline-primary'" @click="setCategory('voting')">
+                        <i class="fas fa-vote-yea me-1"></i>Voting
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="btn" :class="currentCategory === 'results' ? 'btn-primary' : 'btn-outline-primary'" @click="setCategory('results')">
+                        <i class="fas fa-chart-line me-1"></i>Results
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="btn" :class="currentCategory === 'account' ? 'btn-primary' : 'btn-outline-primary'" @click="setCategory('account')">
+                        <i class="fas fa-user-circle me-1"></i>Account
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Expand/Collapse All Buttons -->
+    <div class="text-center mb-4">
+        <button class="btn btn-sm btn-outline-secondary me-2" @click="expandAll()">
+            <i class="fas fa-plus-circle"></i> Expand All
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" @click="collapseAll()">
+            <i class="fas fa-minus-circle"></i> Collapse All
+        </button>
+    </div>
+
+    <!-- FAQ Accordion -->
+    <div class="accordion" id="faqAccordion">
+        <template x-for="(faq, index) in filteredFaqs" :key="faq.id">
+            <div class="accordion-item mb-3 shadow-sm animate__animated animate__fadeInUp" :data-category="faq.category">
+                <h2 class="accordion-header" :id="'heading' + faq.id">
+                    <button class="accordion-button" :class="collapsedClasses(faq)" type="button" data-bs-toggle="collapse" :data-bs-target="'#collapse' + faq.id" :aria-expanded="isExpanded(faq)" :aria-controls="'collapse' + faq.id">
+                        <span x-text="faq.question"></span>
+                        <span class="badge bg-secondary ms-2" x-text="faq.categoryLabel" x-show="faq.category !== 'all'"></span>
+                    </button>
+                </h2>
+                <div :id="'collapse' + faq.id" class="accordion-collapse collapse" :class="{'show': expandedItems.includes(faq.id)}" :aria-labelledby="'heading' + faq.id" data-bs-parent="#faqAccordion">
+                    <div class="accordion-body" x-html="faq.answer"></div>
+                </div>
+            </div>
+        </template>
+        <div x-show="filteredFaqs.length === 0" class="alert alert-info text-center">
+            <i class="fas fa-info-circle me-2"></i> No FAQs match your search. Try different keywords or <a href="{% url 'contact' %}" class="alert-link">contact us</a>.
+        </div>
+    </div>
+
+    <!-- Still Have Questions? -->
+    <div class="row mt-5">
+        <div class="col-md-8 mx-auto text-center">
+            <div class="card bg-primary text-white shadow-lg animate__animated animate__fadeInUp">
+                <div class="card-body py-4">
+                    <i class="fas fa-comments fa-3x mb-3"></i>
+                    <h4>Still have questions?</h4>
+                    <p>Can't find the answer you're looking for? Please contact our support team.</p>
+                    <a href="{% url 'contact' %}" class="btn btn-light btn-lg px-4">
+                        <i class="fas fa-envelope me-2"></i>Contact Us
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Custom animations for accordion items */
+    .accordion-item {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .accordion-item:hover {
+        transform: translateX(5px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .accordion-button:not(.collapsed) {
+        background-color: rgba(var(--primary-rgb), 0.05);
+        color: var(--primary-color);
+    }
+    .animate__animated {
+        animation-duration: 0.5s;
+    }
+    .nav-pills .btn {
+        transition: all 0.3s;
+    }
+    .nav-pills .btn:hover {
+        transform: translateY(-2px);
+    }
+    .badge {
+        font-size: 0.7rem;
+        vertical-align: middle;
+    }
+    /* Dark mode compatibility */
+    body.dark-mode .accordion-button {
+        background-color: var(--card-bg);
+        color: var(--text-color);
+    }
+    body.dark-mode .accordion-button:not(.collapsed) {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: var(--primary-btn);
+    }
+</style>
+
+<script>
+    function faqApp() {
+        return {
+            faqs: [],
+            filteredFaqs: [],
+            searchTerm: '',
+            currentCategory: 'all',
+            expandedItems: [],  // track expanded items by ID
+
+            init() {
+                // FAQ data – you can later load this from the server if needed
+                this.faqs = [
+                    {
+                        id: 1,
+                        question: "How do I register to vote?",
+                        answer: "Click on the <strong>Register</strong> link in the navbar. Fill in your personal details, upload a clear photo of your ID, and capture your face using your webcam. After submitting, an administrator will verify your information. You'll receive an email notification once your account is verified.",
+                        category: "registration",
+                        categoryLabel: "Registration"
+                    },
+                    {
+                        id: 2,
+                        question: "How do I vote?",
+                        answer: "After logging in and verifying your account, navigate to the <strong>Vote</strong> page. You'll see the positions relevant to your school and department. Select your preferred candidates, review your choices, and confirm. Your vote is encrypted and a unique receipt is generated for verification.",
+                        category: "voting",
+                        categoryLabel: "Voting"
+                    },
+                    {
+                        id: 3,
+                        question: "Can I change my vote after casting it?",
+                        answer: "No, votes are final once confirmed. However, if you haven't yet confirmed, you can go back and change your selection before the final submission.",
+                        category: "voting",
+                        categoryLabel: "Voting"
+                    },
+                    {
+                        id: 4,
+                        question: "How can I verify my vote was counted?",
+                        answer: "Use the <strong>Check Receipt</strong> page and enter the receipt ID you received after voting. The system will confirm that your vote is recorded and even display a QR code for easy sharing.",
+                        category: "results",
+                        categoryLabel: "Results"
+                    },
+                    {
+                        id: 5,
+                        question: "When will results be available?",
+                        answer: "Results are published immediately after the election period ends and the tallying process is completed. You can view them on the <strong>Results</strong> page. Administrators can also export results as CSV.",
+                        category: "results",
+                        categoryLabel: "Results"
+                    },
+                    {
+                        id: 6,
+                        question: "What should I do if I forget my password?",
+                        answer: "Click the <strong>Forgot Password?</strong> link on the login page. Enter your email address, and we'll send you instructions to reset your password.",
+                        category: "account",
+                        categoryLabel: "Account"
+                    },
+                    {
+                        id: 7,
+                        question: "Why is my account not verified yet?",
+                        answer: "Accounts are verified manually by administrators to ensure authenticity. This process may take up to 24 hours. If you've been waiting longer, please contact support.",
+                        category: "account",
+                        categoryLabel: "Account"
+                    }
+                ];
+                this.filterFaqs();
+            },
+
+            filterFaqs() {
+                let filtered = this.faqs;
+                // Apply category filter
+                if (this.currentCategory !== 'all') {
+                    filtered = filtered.filter(f => f.category === this.currentCategory);
+                }
+                // Apply search term
+                if (this.searchTerm.trim() !== '') {
+                    const term = this.searchTerm.toLowerCase();
+                    filtered = filtered.filter(f =>
+                        f.question.toLowerCase().includes(term) ||
+                        f.answer.toLowerCase().includes(term)
+                    );
+                }
+                this.filteredFaqs = filtered;
+                // Reset expanded items when filter changes (optional)
+                // this.expandedItems = [];
+            },
+
+            setCategory(cat) {
+                this.currentCategory = cat;
+                this.filterFaqs();
+                // Optional: scroll to top of list
+                window.scrollTo({ top: document.querySelector('.accordion').offsetTop - 20, behavior: 'smooth' });
+            },
+
+            expandAll() {
+                this.expandedItems = this.filteredFaqs.map(f => f.id);
+                // Trigger Bootstrap collapse show for each
+                setTimeout(() => {
+                    this.filteredFaqs.forEach(f => {
+                        const target = document.querySelector(`#collapse${f.id}`);
+                        if (target && !target.classList.contains('show')) {
+                            const bsCollapse = new bootstrap.Collapse(target, { toggle: true });
+                        }
+                    });
+                }, 50);
+            },
+
+            collapseAll() {
+                this.expandedItems = [];
+                this.filteredFaqs.forEach(f => {
+                    const target = document.querySelector(`#collapse${f.id}`);
+                    if (target && target.classList.contains('show')) {
+                        const bsCollapse = new bootstrap.Collapse(target, { toggle: true });
+                    }
+                });
+            },
+
+            isExpanded(faq) {
+                // Check DOM state (Bootstrap adds 'show' class)
+                const target = document.querySelector(`#collapse${faq.id}`);
+                return target ? target.classList.contains('show') : false;
+            },
+
+            collapsedClasses(faq) {
+                return this.isExpanded(faq) ? '' : 'collapsed';
+            }
+        };
+    }
+</script>
+{% endblock %}

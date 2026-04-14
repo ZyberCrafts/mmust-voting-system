@@ -1,0 +1,247 @@
+{% extends 'voting/base.html' %}
+{% block content %}
+
+<div x-data="ballotApp()" x-init="init()" class="ballot-container">
+    <!-- Header with election name and progress -->
+    <div class="text-center mb-4 animate__animated animate__fadeInDown">
+        <h2 class="fw-bold text-primary">🗳️ Vote for <span class="text-primary">{{ election.name }}</span></h2>
+        <div class="progress mt-3 mx-auto" style="max-width: 400px; height: 10px;">
+            <div class="progress-bar bg-success" role="progressbar" :style="`width: ${completionPercentage}%`" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <p class="mt-2 text-muted" x-text="`${completedPositions} of ${totalPositions} positions selected`"></p>
+    </div>
+
+    <form method="post" @submit.prevent="confirmSubmission">
+        {% csrf_token %}
+
+        {% for position, candidates in candidates_by_position.items %}
+            <div class="card mb-4 shadow-sm border-0 position-card" data-aos="fade-up" data-aos-delay="{{ forloop.counter0|add:100 }}">
+                <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0 fw-semibold">{{ position.name }}</h4>
+                    <span class="badge bg-secondary" x-show="selected['{{ position.id }}'] != null" x-cloak>✔️ Selected</span>
+                    <span class="badge bg-light text-dark" x-show="selected['{{ position.id }}'] == null">Pending</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        {% for candidate in candidates %}
+                            <div class="col-md-4 col-sm-6">
+                                <div class="card candidate-card h-100"
+                                     :class="{ 'selected': selected['{{ position.id }}'] == {{ candidate.id }} }"
+                                     @click="select({{ position.id }}, {{ candidate.id }})"
+                                     role="button"
+                                     tabindex="0"
+                                     @keyup.enter="select({{ position.id }}, {{ candidate.id }})"
+                                     aria-label="Select {{ candidate.user.get_full_name }}">
+                                    <div class="card-body text-center">
+                                        <!-- Candidate Photo / Avatar -->
+                                        <div class="candidate-avatar mb-3">
+                                            {% if candidate.user.id_photo %}
+                                                <img src="{{ candidate.user.id_photo.url }}" class="rounded-circle shadow-sm" width="90" height="90" alt="{{ candidate.user.get_full_name }}">
+                                            {% else %}
+                                                <div class="rounded-circle bg-secondary bg-opacity-25 d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 90px; height: 90px;">
+                                                    <i class="bi bi-person-fill fs-1"></i>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <h5 class="card-title">{{ candidate.user.get_full_name }}</h5>
+                                        <p class="card-text">
+                                            <span class="badge" style="background-color: {{ candidate.party.color|default:'#6c757d' }}; color: white;">
+                                                {{ candidate.party.name|default:"Independent" }}
+                                            </span>
+                                        </p>
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="radio" name="position_{{ position.id }}" value="{{ candidate.id }}"
+                                                   :checked="selected['{{ position.id }}'] == {{ candidate.id }}"
+                                                   @click.stop>
+                                            <label class="form-check-label fw-bold">
+                                                <span x-show="selected['{{ position.id }}'] == {{ candidate.id }}" x-cloak>
+                                                    ✅ Selected
+                                                </span>
+                                                <span x-show="selected['{{ position.id }}'] != {{ candidate.id }}">
+                                                    Select
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="col-12 text-center text-muted py-4">
+                                <i class="bi bi-info-circle"></i> No candidates for this position.
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+
+        <div class="d-flex justify-content-center mt-5 mb-4">
+            <button type="submit" class="btn btn-success btn-lg px-5 py-3 shadow-lg" :disabled="submitting" id="submitVoteBtn">
+                <span x-show="!submitting"><i class="bi bi-check2-circle"></i> Review Your Vote</span>
+                <span x-show="submitting"><span class="spinner-border spinner-border-sm me-2"></span> Processing...</span>
+            </button>
+        </div>
+    </form>
+
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="bi bi-question-circle"></i> Confirm Your Vote</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>You have selected candidates for <strong x-text="completedPositions"></strong> out of <strong x-text="totalPositions"></strong> positions.</p>
+                    <p class="text-warning">⚠️ Once confirmed, your vote cannot be changed.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" @click="submitForm">Yes, Cast My Vote</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Additional styles for ballot */
+    [x-cloak] { display: none !important; }
+
+    /* Dark mode overrides */
+    body.dark-mode .position-card {
+        background-color: var(--card-bg);
+        border-color: var(--border-color);
+    }
+    body.dark-mode .position-card .card-header {
+        color: var(--text-color) !important;
+        background-color: rgba(59,130,246,0.15) !important;
+    }
+    body.dark-mode .candidate-card {
+        background-color: var(--card-bg);
+        border-color: var(--border-color);
+    }
+    body.dark-mode .candidate-card .card-title,
+    body.dark-mode .candidate-card .card-text {
+        color: var(--text-color) !important;
+    }
+    body.dark-mode .candidate-card.selected {
+        background-color: rgba(16,185,129,0.15);
+        border-color: #10b981;
+    }
+    body.dark-mode .form-check-label {
+        color: var(--text-color);
+    }
+    body.dark-mode .badge.bg-light {
+        background-color: #2d3748 !important;
+        color: #e0e0e0 !important;
+    }
+
+    /* Card animations */
+    .candidate-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
+        border: 2px solid transparent;
+        border-radius: 1rem;
+    }
+    .candidate-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 15px 25px rgba(0,0,0,0.1);
+    }
+    .candidate-card.selected {
+        border-color: #28a745;
+        background-color: rgba(40,167,69,0.08);
+        box-shadow: 0 0 0 3px rgba(40,167,69,0.2);
+    }
+    .candidate-avatar img, .candidate-avatar .rounded-circle {
+        object-fit: cover;
+        border: 3px solid white;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }
+    .candidate-card:hover .candidate-avatar img {
+        transform: scale(1.02);
+    }
+    .progress-bar {
+        transition: width 0.3s ease;
+    }
+    @media (max-width: 768px) {
+        .candidate-card .card-body {
+            padding: 1rem;
+        }
+        .candidate-avatar img, .candidate-avatar .rounded-circle {
+            width: 70px;
+            height: 70px;
+        }
+    }
+</style>
+
+<script>
+    function ballotApp() {
+        return {
+            selected: {},
+            totalPositions: {{ candidates_by_position|length }},
+            submitting: false,
+            init() {
+                // Sync with existing radio button selections (if any from session)
+                const radios = document.querySelectorAll('input[type=radio]');
+                radios.forEach(radio => {
+                    const nameParts = radio.name.split('_');
+                    const posId = parseInt(nameParts[1]);
+                    if (radio.checked) {
+                        this.selected[posId] = parseInt(radio.value);
+                    }
+                    radio.addEventListener('change', (e) => {
+                        const val = parseInt(e.target.value);
+                        this.selected[posId] = val;
+                    });
+                });
+            },
+            get completedPositions() {
+                return Object.keys(this.selected).length;
+            },
+            get completionPercentage() {
+                return (this.completedPositions / this.totalPositions) * 100;
+            },
+            select(positionId, candidateId) {
+                this.selected[positionId] = candidateId;
+                // Also update the corresponding radio button
+                const radio = document.querySelector(`input[name="position_${positionId}"][value="${candidateId}"]`);
+                if (radio) radio.checked = true;
+                // Dispatch event for optional tracking
+                this.$dispatch('candidate-selected', { positionId, candidateId });
+            },
+            confirmSubmission() {
+                if (this.completedPositions === 0) {
+                    alert('Please select at least one candidate before voting.');
+                    return;
+                }
+                const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+                modal.show();
+            },
+            submitForm() {
+                this.submitting = true;
+                // Hide modal and submit form
+                const modalEl = document.getElementById('confirmModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                modal.hide();
+                // Submit the form
+                this.$el.submit();
+            }
+        }
+    }
+
+    // Register Alpine component
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('ballotApp', ballotApp);
+    });
+</script>
+
+<!-- Ensure AOS is loaded for scroll animations (optional) -->
+<link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script>
+    AOS.init({ once: true, duration: 500 });
+</script>
+
+{% endblock %}

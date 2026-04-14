@@ -1,0 +1,177 @@
+{% extends 'voting/base.html' %}
+
+{% block content %}
+<div class="row justify-content-center" x-data="broadcast()">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">📢 Broadcast Notification</h3>
+                <span class="badge bg-light text-primary">Admin Only</span>
+            </div>
+            <div class="card-body">
+                <form method="post" @submit.prevent="confirmSend">
+                    {% csrf_token %}
+                    
+                    <!-- Subject -->
+                    <div class="mb-3">
+                        <label for="{{ form.subject.id_for_label }}" class="form-label">Subject</label>
+                        <input type="text" name="{{ form.subject.name }}" id="{{ form.subject.id_for_label }}" 
+                               class="form-control" placeholder="e.g., Urgent Voting Reminder" required
+                               x-model="subject">
+                        <div class="form-text">Brief title for the notification.</div>
+                    </div>
+
+                    <!-- Message -->
+                    <div class="mb-3">
+                        <label for="{{ form.message.id_for_label }}" class="form-label">Message</label>
+                        <textarea name="{{ form.message.name }}" id="{{ form.message.id_for_label }}" 
+                                  rows="5" class="form-control" placeholder="Write your message here..." required
+                                  x-model="message" @input="updateCharCount"></textarea>
+                        <div class="form-text d-flex justify-content-between">
+                            <span>You can use plain text. No HTML.</span>
+                            <span x-text="charCount + ' characters'"></span>
+                        </div>
+                    </div>
+
+                    <!-- Send To -->
+                    <div class="mb-3">
+                        <label class="form-label">Send to</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            {% for choice in form.send_to.field.choices %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="{{ form.send_to.name }}" 
+                                       id="send_to_{{ choice.0 }}" value="{{ choice.0 }}" 
+                                       {% if forloop.first %}checked{% endif %}
+                                       x-model="sendTo">
+                                <label class="form-check-label" for="send_to_{{ choice.0 }}">
+                                    {{ choice.1 }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Channels -->
+                    <div class="mb-3">
+                        <label class="form-label">Send via</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="{{ form.via_email.name }}" 
+                                       id="{{ form.via_email.id_for_label }}" value="on" checked
+                                       x-model="viaEmail">
+                                <label class="form-check-label" for="{{ form.via_email.id_for_label }}">
+                                    Email
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="{{ form.via_sms.name }}" 
+                                       id="{{ form.via_sms.id_for_label }}" value="on"
+                                       x-model="viaSms">
+                                <label class="form-check-label" for="{{ form.via_sms.id_for_label }}">
+                                    SMS
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-text" x-show="viaSms">⚠️ SMS messages are limited to 160 characters.</div>
+                    </div>
+
+                    <!-- Preview (optional) -->
+                    <div class="mb-3" x-show="subject || message">
+                        <hr>
+                        <h5>Preview</h5>
+                        <div class="alert alert-light border">
+                            <strong x-text="subject || 'Subject'"></strong><br>
+                            <div x-text="message || 'Message will appear here...'"></div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100" 
+                            :disabled="isSending" x-text="isSending ? 'Sending...' : 'Send Broadcast'">
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title" id="confirmModalLabel">Confirm Broadcast</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>You are about to send a broadcast to <strong x-text="sendToLabel"></strong> via 
+                    <span x-show="viaEmail">email</span><span x-show="viaEmail && viaSms"> and </span>
+                    <span x-show="viaSms">SMS</span>.</p>
+                    <p>Are you sure you want to proceed?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @click="submitForm">Yes, Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function broadcast() {
+    return {
+        subject: '',
+        message: '',
+        sendTo: '{{ form.send_to.field.choices.0.0 }}',
+        viaEmail: true,
+        viaSms: false,
+        isSending: false,
+        charCount: 0,
+        get sendToLabel() {
+            const map = {
+                'all': 'All Users',
+                'voters': 'Voters',
+                'candidates': 'Candidates',
+                'polling_officers': 'Polling Officers',
+                'admins': 'Admins'
+            };
+            return map[this.sendTo] || 'selected group';
+        },
+        updateCharCount() {
+            this.charCount = this.message.length;
+        },
+        confirmSend() {
+            // Show modal
+            new bootstrap.Modal(document.getElementById('confirmModal')).show();
+        },
+        submitForm() {
+            this.isSending = true;
+            // Submit the form programmatically
+            document.querySelector('form').submit();
+        }
+    }
+}
+</script>
+
+<style>
+/* Inline custom animations */
+.card {
+    transition: transform 0.2s ease-in-out;
+}
+.card:hover {
+    transform: translateY(-3px);
+}
+.btn-primary {
+    transition: background-color 0.2s;
+}
+.btn-primary:disabled {
+    cursor: not-allowed;
+}
+.form-check-input:checked {
+    background-color: #0000ff;
+    border-color: #0000ff;
+}
+.modal-body, .modal-body p, .modal-body label {
+        color: #000000 !important;
+    }
+</style>
+{% endblock %}

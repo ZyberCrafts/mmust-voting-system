@@ -1,0 +1,182 @@
+{% extends 'voting/base.html' %}
+{% block content %}
+
+<div x-data="mapApp()" x-init="initMap()" class="container-fluid px-0">
+    <!-- Header with controls -->
+    <div class="row mb-3">
+        <div class="col-md-8">
+            <h2 class="text-primary">Voter Distribution Heatmap</h2>
+            <p class="text-muted">Real‑time voter locations for <strong>{{ election.name }}</strong></p>
+        </div>
+        <div class="col-md-4 text-end">
+            <div class="btn-group">
+                <button @click="toggleHeatmap" class="btn btn-outline-primary" :class="{'active': heatmapVisible}">
+                    🔥 Heatmap
+                </button>
+                <button @click="toggleMarkers" class="btn btn-outline-primary" :class="{'active': markersVisible}">
+                    📍 Markers
+                </button>
+                <button @click="refreshData" class="btn btn-outline-secondary">
+                    🔄 Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map container -->
+    <div id="map" style="height: 70vh; min-height: 400px; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+
+    <!-- Stats card -->
+    <div class="row mt-3">
+        <div class="col-md-4">
+            <div class="card text-center shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Total Voters</h5>
+                    <h3 x-text="totalVoters">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Unique Locations</h5>
+                    <h3 x-text="uniqueLocations">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Last Updated</h5>
+                    <h3 x-text="lastUpdated">--:--</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay (Alpine controlled) -->
+    <div x-show="loading" class="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style="background: rgba(0,0,0,0.5); z-index: 9999;">
+        <div class="spinner-border text-light" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+
+<!-- Required libraries -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+<!-- Alpine.js -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+<script>
+    function mapApp() {
+        return {
+            map: null,
+            heatLayer: null,
+            markerCluster: null,
+            markers: [],
+            heatmapVisible: true,
+            markersVisible: false,
+            loading: true,
+            totalVoters: 0,
+            uniqueLocations: 0,
+            lastUpdated: '',
+            ws: null,
+
+            initMap() {
+                // Center on Kenya
+                this.map = L.map('map').setView([0.0236, 37.9062], 6);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> | CartoDB'
+                }).addTo(this.map);
+
+                // Connect WebSocket for real‑time updates (if election ongoing)
+                const electionId = {{ election.id }};
+                this.ws = new WebSocket(`ws://${window.location.host}/ws/live/${electionId}/`);
+                this.ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    // update stats if needed
+                };
+                this.ws.onclose = () => console.log("WebSocket closed");
+                
+                this.loadData();
+            },
+
+            loadData() {
+                this.loading = true;
+                const electionId = {{ election.id }};
+                fetch(`/api/voter-locations/${electionId}/`)
+                    .then(res => res.json())
+                    .then(data => {
+                        // Update stats
+                        this.totalVoters = data.reduce((sum, p) => sum + p.count, 0);
+                        this.uniqueLocations = data.length;
+                        this.lastUpdated = new Date().toLocaleTimeString();
+                        this.updateMapData(data);
+                        this.loading = false;
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        this.loading = false;
+                        alert('Failed to load location data.');
+                    });
+            },
+
+            updateMapData(points) {
+                // Prepare heat data: [lat, lng, intensity]
+                const heatPoints = points.map(p => [p.lat, p.lon, p.count]);
+                // Remove existing layers
+                if (this.heatLayer) this.map.removeLayer(this.heatLayer);
+                if (this.markerCluster) this.map.removeLayer(this.markerCluster);
+                
+                // Create heat layer
+                this.heatLayer = L.heatLayer(heatPoints, {
+                    radius: 25,
+                    blur: 15,
+                    maxZoom: 10,
+                    minOpacity: 0.5,
+                    gradient: {0.4: 'blue', 0.6: 'lime', 0.8: 'yellow', 1.0: 'red'}
+                });
+                if (this.heatmapVisible) this.heatLayer.addTo(this.map);
+
+                // Create marker cluster group
+                this.markerCluster = L.markerClusterGroup();
+                points.forEach(p => {
+                    const marker = L.marker([p.lat, p.lon])
+                        .bindPopup(`<b>Voters</b>: ${p.count}<br>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`);
+                    this.markerCluster.addLayer(marker);
+                });
+                if (this.markersVisible) this.markerCluster.addTo(this.map);
+            },
+
+            toggleHeatmap() {
+                this.heatmapVisible = !this.heatmapVisible;
+                if (this.heatmapVisible) {
+                    this.heatLayer.addTo(this.map);
+                } else {
+                    this.map.removeLayer(this.heatLayer);
+                }
+            },
+
+            toggleMarkers() {
+                this.markersVisible = !this.markersVisible;
+                if (this.markersVisible) {
+                    this.markerCluster.addTo(this.map);
+                } else {
+                    this.map.removeLayer(this.markerCluster);
+                }
+            },
+
+            refreshData() {
+                this.loadData();
+            }
+        };
+    }
+</script>
+
+{% endblock %}

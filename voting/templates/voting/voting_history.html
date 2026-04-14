@@ -1,0 +1,209 @@
+{% extends 'voting/base.html' %}
+
+{% block content %}
+<div x-data="votingHistory()" x-init="init()" class="container-fluid px-0">
+    <!-- Header with animation -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 animate__animated animate__fadeInDown">
+        <h2 class="text-primary mb-3 mb-md-0">
+            <i class="fas fa-history me-2"></i>Your Voting History
+        </h2>
+        <div class="input-group w-auto shadow-sm">
+            <span class="input-group-text bg-primary text-white"><i class="fas fa-search"></i></span>
+            <input type="text" class="form-control" x-model="searchTerm" @input="filterHistory" placeholder="Filter by election...">
+            <button class="btn btn-outline-secondary" @click="searchTerm = ''" x-show="searchTerm">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Results count badge -->
+    <div class="mb-3" x-show="filteredHistory.length > 0">
+        <span class="badge bg-primary rounded-pill p-2">
+            <i class="fas fa-chart-line me-1"></i> <span x-text="filteredHistory.length"></span> of <span x-text="history.length"></span> records
+        </span>
+    </div>
+
+    <!-- Desktop table (hidden on mobile) -->
+    <div class="card shadow animate__animated animate__fadeInUp d-none d-md-block">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-primary text-white">
+                        <tr>
+                            <th>Election</th>
+                            <th>Voted On</th>
+                            <th>Receipt ID</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="item in filteredHistory" :key="item.id">
+                            <tr x-show="true" x-transition.duration.300ms class="history-row">
+                                <td x-text="item.election_name" class="fw-bold"></td>
+                                <td x-text="new Date(item.voted_at).toLocaleString()"></td>
+                                <td>
+                                    <code x-text="item.receipt_short"></code>
+                                    <button class="btn btn-sm btn-outline-secondary ms-2" @click="copyReceipt(item.receipt)" data-bs-toggle="tooltip" title="Copy full receipt ID">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" @click="showQR(item.receipt)">
+                                        <i class="fas fa-qrcode"></i> QR
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="filteredHistory.length === 0">
+                            <td colspan="4" class="text-center text-muted py-4">
+                                <i class="fas fa-vote-yea fa-2x mb-2 d-block"></i>
+                                No voting records found.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile cards (visible on small screens) -->
+    <div class="d-block d-md-none">
+        <template x-for="item in filteredHistory" :key="item.id">
+            <div class="card mb-3 shadow-sm animate__animated animate__fadeInUp" x-show="true" x-transition.duration.300ms>
+                <div class="card-body">
+                    <h5 class="card-title text-primary" x-text="item.election_name"></h5>
+                    <p class="card-text mb-1">
+                        <strong>Voted:</strong> <span x-text="new Date(item.voted_at).toLocaleString()"></span>
+                    </p>
+                    <p class="card-text mb-2">
+                        <strong>Receipt:</strong> <code x-text="item.receipt_short"></code>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" @click="copyReceipt(item.receipt)">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </p>
+                    <button class="btn btn-sm btn-info w-100" @click="showQR(item.receipt)">
+                        <i class="fas fa-qrcode me-1"></i> Show QR Code
+                    </button>
+                </div>
+            </div>
+        </template>
+        <div x-show="filteredHistory.length === 0" class="text-center text-muted py-4">
+            <i class="fas fa-vote-yea fa-2x mb-2 d-block"></i>
+            No voting records found.
+        </div>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Your Vote Receipt QR</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="qrImage" src="" alt="QR Code" style="max-width: 200px;">
+                    <p class="mt-3"><strong>Receipt ID:</strong> <code id="receiptId"></code></p>
+                    <p class="text-muted small">Scan this QR code to verify your vote.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button class="btn btn-primary" @click="copyReceipt(document.getElementById('receiptId').innerText)">
+                        <i class="fas fa-copy"></i> Copy ID
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Inline CSS -->
+<style>
+    .history-row {
+        transition: background-color 0.2s ease;
+    }
+    .history-row:hover {
+        background-color: #f0f8ff;
+        transform: translateX(3px);
+    }
+    .animate__animated {
+        animation-duration: 0.4s;
+    }
+    .btn-outline-secondary:active {
+        transform: scale(0.95);
+    }
+    .toast-custom {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 200px;
+    }
+    @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-5px); }
+    }
+    .fa-copy:active {
+        animation: bounce 0.3s ease;
+    }
+</style>
+
+<!-- Alpine.js Component -->
+<script>
+    function votingHistory() {
+        return {
+            history: [],          // list of objects from Django
+            filteredHistory: [],
+            searchTerm: '',
+
+            init() {
+                // Convert Django data to JSON
+                this.history = {{ history_json|safe }};
+                this.filteredHistory = [...this.history];
+                // Initialize Bootstrap tooltips (if any)
+                if (typeof bootstrap !== 'undefined') {
+                    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                    tooltipTriggerList.map(function (tooltipTriggerEl) {
+                        return new bootstrap.Tooltip(tooltipTriggerEl);
+                    });
+                }
+            },
+
+            filterHistory() {
+                const term = this.searchTerm.toLowerCase();
+                this.filteredHistory = this.history.filter(item =>
+                    item.election_name.toLowerCase().includes(term)
+                );
+            },
+
+            copyReceipt(receipt) {
+                navigator.clipboard.writeText(receipt).then(() => {
+                    this.showToast('Receipt ID copied!', 'success');
+                }).catch(() => {
+                    this.showToast('Failed to copy', 'danger');
+                });
+            },
+
+            showQR(receipt) {
+                // Use external QR API (free, no key needed)
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(receipt)}`;
+                document.getElementById('qrImage').src = qrUrl;
+                document.getElementById('receiptId').innerText = receipt;
+                const modal = new bootstrap.Modal(document.getElementById('qrModal'));
+                modal.show();
+            },
+
+            showToast(message, type) {
+                // Simple temporary toast
+                const toastDiv = document.createElement('div');
+                toastDiv.className = `toast-custom alert alert-${type} shadow`;
+                toastDiv.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}`;
+                document.body.appendChild(toastDiv);
+                setTimeout(() => {
+                    toastDiv.remove();
+                }, 2000);
+            }
+        }
+    }
+</script>
+{% endblock %}

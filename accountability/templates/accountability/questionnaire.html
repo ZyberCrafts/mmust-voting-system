@@ -1,0 +1,192 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+{% block content %}
+<div class="container py-4" x-data="ratingApp()" x-init="init()">
+    <!-- Header with animation -->
+    <div class="text-center mb-5 animate__animated animate__fadeInDown">
+        <h2 class="display-5 fw-bold text-primary">
+            <i class="bi bi-star-fill text-warning"></i> Rate Your Leaders
+        </h2>
+        <p class="lead text-muted">{{ session.election.name }}</p>
+        <p class="text-muted">Your feedback helps hold leaders accountable. Ratings are anonymous.</p>
+    </div>
+
+    <form method="post" id="ratingForm" @submit.prevent="submitForm">
+        {% csrf_token %}
+        {% for item in items %}
+            <div class="card mb-4 shadow-sm animate__animated animate__fadeInUp" x-data="itemRating({{ item.id }})" x-init="initItem({{ item.id }})">
+                <div class="card-body">
+                    <h5 class="card-title">{{ item.description }}</h5>
+                    <p class="text-muted small">Candidate: {{ item.candidate.user.get_full_name }}</p>
+                    
+                    <!-- Star Rating Input -->
+                    <div class="mb-3">
+                        <div class="d-flex gap-2 align-items-center">
+                            <span class="fw-bold me-2">Rating:</span>
+                            <div class="star-rating">
+                                <template x-for="star in [1,2,3,4,5]" :key="star">
+                                    <i class="bi bi-star-fill fs-4" 
+                                       :class="{ 'text-warning': rating >= star, 'text-secondary': rating < star }"
+                                       @click="setRating(star)"
+                                       @mouseover="hoverRating = star"
+                                       @mouseleave="hoverRating = rating"
+                                       style="cursor: pointer; transition: all 0.2s ease;"></i>
+                                </template>
+                            </div>
+                            <span class="ms-2 text-muted" x-text="rating > 0 ? `${rating} ★` : 'Not rated'"></span>
+                        </div>
+                        <input type="hidden" :name="`rating_${itemId}`" x-model="rating">
+                    </div>
+
+                    <!-- Comment Field -->
+                    <div class="mb-3">
+                        <label class="form-label">Comment (optional)</label>
+                        <textarea class="form-control" rows="2" :name="`comment_${itemId}`" 
+                                  x-model="comment"
+                                  @input="updateCharCount"
+                                  placeholder="What specific actions would you like to see?"></textarea>
+                        <small class="text-muted" x-text="`${comment.length}/500 characters`"></small>
+                    </div>
+                    {{ field.errors }}
+                </div>
+            </div>
+        {% empty %}
+            <div class="alert alert-warning text-center">No items to rate at this time.</div>
+        {% endfor %}
+
+        <div class="d-flex justify-content-center mt-4">
+            <button type="submit" class="btn btn-primary btn-lg px-5" x-bind:disabled="submitting">
+                <span x-show="!submitting"><i class="bi bi-check-lg"></i> Submit Ratings</span>
+                <span x-show="submitting"><span class="spinner-border spinner-border-sm"></span> Submitting...</span>
+            </button>
+        </div>
+    </form>
+
+    <!-- Confirmation Modal -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Confirm Your Ratings</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>You have rated <span x-text="ratedCount"></span> out of <span x-text="totalItems"></span> items.</p>
+                    <p>Are you sure you want to submit these ratings? You cannot change them later.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" @click="submitConfirmed">Yes, Submit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Animated stars */
+    .star-rating i {
+        transition: transform 0.1s ease, color 0.2s ease;
+    }
+    .star-rating i:hover {
+        transform: scale(1.2);
+    }
+    .card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .animate__animated {
+        animation-duration: 0.5s;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+    .btn-primary:active {
+        animation: pulse 0.2s ease;
+    }
+</style>
+
+<script>
+    function ratingApp() {
+        return {
+            items: {},
+            totalItems: {{ items|length }},
+            ratedCount: 0,
+            submitting: false,
+
+            init() {
+                // Watch for changes in ratedCount
+                this.$watch('ratedCount', (val) => {
+                    // optional: auto-save or update UI
+                });
+            },
+
+            updateRatedCount() {
+                let count = 0;
+                for (let id in this.items) {
+                    if (this.items[id].rating > 0) count++;
+                }
+                this.ratedCount = count;
+            },
+
+            submitForm() {
+                if (this.ratedCount === 0) {
+                    alert("Please rate at least one item before submitting.");
+                    return;
+                }
+                const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+                modal.show();
+            },
+
+            submitConfirmed() {
+                this.submitting = true;
+                document.getElementById('ratingForm').submit();
+            }
+        };
+    }
+
+    function itemRating(itemId) {
+        return {
+            itemId: itemId,
+            rating: 0,
+            comment: '',
+            hoverRating: 0,
+
+            initItem(id) {
+                this.itemId = id;
+                // Get existing values from backend (if any)
+                const ratingField = document.querySelector(`input[name="rating_${id}"]`);
+                const commentField = document.querySelector(`textarea[name="comment_${id}"]`);
+                if (ratingField && ratingField.value) this.rating = parseInt(ratingField.value);
+                if (commentField && commentField.value) this.comment = commentField.value;
+                // Register in parent app
+                if (window.ratingApp) {
+                    window.ratingApp.items[this.itemId] = this;
+                    window.ratingApp.updateRatedCount();
+                }
+            },
+
+            setRating(value) {
+                this.rating = value;
+                if (window.ratingApp) window.ratingApp.updateRatedCount();
+            },
+
+            updateCharCount() {
+                if (this.comment.length > 500) this.comment = this.comment.slice(0, 500);
+            }
+        };
+    }
+
+    // Expose ratingApp globally for child components
+    window.ratingApp = null;
+    document.addEventListener('alpine:init', () => {
+        window.ratingApp = ratingApp();
+        Alpine.data('ratingApp', () => window.ratingApp);
+    });
+</script>
+{% endblock %}

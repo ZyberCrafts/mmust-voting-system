@@ -1,0 +1,312 @@
+{% extends 'voting/base.html' %}
+{% load static %}
+
+{% block extra_head %}
+<!-- AOS (Animate On Scroll) CSS -->
+<link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+<!-- Typed.js for typing effect -->
+<script src="https://cdn.jsdelivr.net/npm/typed.js@2.0.12"></script>
+{% endblock %}
+
+{% block content %}
+<div class="landing-page overflow-hidden">
+    <!-- Hero Section with Typing Effect & Parallax -->
+    <div class="hero-section text-center py-5 position-relative" style="background: linear-gradient(135deg, #f5f7fa 0%, #e9f0f5 100%); border-radius: 0 0 40px 40px;">
+        <div class="container py-5" data-aos="fade-up" data-aos-duration="1000">
+            <h1 class="display-3 fw-bold text-primary">MMUST Voting System</h1>
+            <p class="lead mt-3">
+                <span id="typed-text" style="font-weight: 500;"></span>
+            </p>
+            <div class="mt-5">
+                <a href="{% url 'login' %}" class="btn btn-primary btn-lg me-3 shadow-lg">Login <i class="bi bi-box-arrow-in-right"></i></a>
+                <a href="{% url 'register' %}" class="btn btn-outline-primary btn-lg shadow">Register <i class="bi bi-person-plus"></i></a>
+            </div>
+        </div>
+        <!-- Parallax floating shapes -->
+        <div class="position-absolute top-0 start-0 w-100 h-100 overflow-hidden" style="pointer-events: none;">
+            <div class="floating-shape shape-1"></div>
+            <div class="floating-shape shape-2"></div>
+            <div class="floating-shape shape-3"></div>
+        </div>
+    </div>
+
+    <!-- Statistics Section with Animated Counters -->
+    <div class="stats-section bg-light py-5" data-aos="fade-up">
+        <div class="container">
+            <div class="row text-center g-4" id="statsContainer">
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <i class="bi bi-people-fill fs-1 text-primary"></i>
+                            <h3 class="mt-2 counter" id="votersCount" data-target="0">0</h3>
+                            <p>Registered Voters</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <i class="bi bi-calendar-check fs-1 text-primary"></i>
+                            <h3 class="mt-2 counter" id="electionsCount" data-target="0">0</h3>
+                            <p>Elections Held</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <i class="bi bi-graph-up fs-1 text-primary"></i>
+                            <h3 class="mt-2 counter" id="turnoutAvg" data-target="0">0%</h3>
+                            <p>Average Turnout</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <i class="bi bi-shield-lock fs-1 text-primary"></i>
+                            <h3 class="mt-2 counter" id="securityIncidents" data-target="0">0</h3>
+                            <p>Security Incidents</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section with AOS -->
+    <div class="features-section py-5">
+        <div class="container">
+            <h2 class="text-center mb-5" data-aos="fade-up">Why Choose MMUST Voting System?</h2>
+            <div class="row g-4">
+                <div class="col-md-4" data-aos="fade-right" data-aos-delay="100">
+                    <div class="card h-100 border-0 shadow-sm text-center p-4 hover-lift">
+                        <i class="bi bi-shield-check fs-1 text-success"></i>
+                        <h4>End-to-End Encryption</h4>
+                        <p>Your vote is encrypted from your device to the server. Only you know your choice.</p>
+                    </div>
+                </div>
+                <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
+                    <div class="card h-100 border-0 shadow-sm text-center p-4 hover-lift">
+                        <i class="bi bi-qr-code fs-1 text-info"></i>
+                        <h4>Verifiable Receipts</h4>
+                        <p>After voting, you receive a unique receipt to verify your vote was counted.</p>
+                    </div>
+                </div>
+                <div class="col-md-4" data-aos="fade-left" data-aos-delay="300">
+                    <div class="card h-100 border-0 shadow-sm text-center p-4 hover-lift">
+                        <i class="bi bi-bar-chart-steps fs-1 text-warning"></i>
+                        <h4>Live Results</h4>
+                        <p>Watch real‑time turnout and results as votes are cast.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upcoming Elections (Static for now, can be made dynamic later) -->
+    <div class="upcoming-section bg-light py-5" data-aos="fade-up">
+        <div class="container">
+            <h2 class="text-center mb-5">Upcoming Elections</h2>
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body d-flex align-items-center justify-content-between flex-wrap">
+                            <div>
+                                <h5 class="mb-1">Student Leadership Elections 2025</h5>
+                                <p class="text-muted mb-0">Scheduled for: <strong>December 15, 2025</strong></p>
+                            </div>
+                            <a href="#" class="btn btn-outline-primary mt-2 mt-sm-0">Learn More</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How It Works Section with Timeline Style -->
+    <div class="how-it-works py-5">
+        <div class="container">
+            <h2 class="text-center mb-5" data-aos="fade-up">How It Works</h2>
+            <div class="row text-center g-4">
+                <div class="col-md-3" data-aos="zoom-in" data-aos-delay="100">
+                    <div class="step-circle bg-primary text-white rounded-circle mx-auto mb-3">1</div>
+                    <h5>Register</h5>
+                    <p>Create an account with your ID and face capture.</p>
+                </div>
+                <div class="col-md-3" data-aos="zoom-in" data-aos-delay="200">
+                    <div class="step-circle bg-primary text-white rounded-circle mx-auto mb-3">2</div>
+                    <h5>Get Verified</h5>
+                    <p>Admin verifies your eligibility.</p>
+                </div>
+                <div class="col-md-3" data-aos="zoom-in" data-aos-delay="300">
+                    <div class="step-circle bg-primary text-white rounded-circle mx-auto mb-3">3</div>
+                    <h5>Vote</h5>
+                    <p>Cast your vote securely during election period.</p>
+                </div>
+                <div class="col-md-3" data-aos="zoom-in" data-aos-delay="400">
+                    <div class="step-circle bg-primary text-white rounded-circle mx-auto mb-3">4</div>
+                    <h5>Verify & Results</h5>
+                    <p>Check your receipt and see live results.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call to Action -->
+    <div class="cta-section bg-primary text-white py-5 text-center" data-aos="fade-up">
+        <div class="container">
+            <h2>Ready to Cast Your Vote?</h2>
+            <p class="lead mb-4">Join thousands of MMUST students in shaping the future of our university.</p>
+            <a href="{% url 'register' %}" class="btn btn-light btn-lg shadow">Get Started <i class="bi bi-arrow-right-circle"></i></a>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script>
+    // Initialize AOS
+    AOS.init({ once: true, duration: 800 });
+
+    // Typing effect
+    new Typed('#typed-text', {
+        strings: ['Secure, transparent, and accessible online voting.', 'Your voice, your vote.', 'Powered by ZyberCrafts.'],
+        typeSpeed: 50,
+        backSpeed: 30,
+        loop: true,
+    });
+
+    // Animated counters
+    function animateCounter(element, target, suffix = '') {
+        let current = 0;
+        const step = Math.ceil(target / 50);
+        const interval = setInterval(() => {
+            current += step;
+            if (current >= target) {
+                element.innerText = target + suffix;
+                clearInterval(interval);
+            } else {
+                element.innerText = current + suffix;
+            }
+        }, 30);
+    }
+
+    // Fetch stats from API and animate
+    fetch('/api/stats/')
+        .then(res => res.json())
+        .then(data => {
+            const votersEl = document.getElementById('votersCount');
+            const electionsEl = document.getElementById('electionsCount');
+            const turnoutEl = document.getElementById('turnoutAvg');
+            const securityEl = document.getElementById('securityIncidents');
+
+            votersEl.setAttribute('data-target', data.registered_voters);
+            electionsEl.setAttribute('data-target', data.elections_held);
+            turnoutEl.setAttribute('data-target', data.avg_turnout);
+            securityEl.setAttribute('data-target', data.security_incidents);
+
+            animateCounter(votersEl, data.registered_voters, '');
+            animateCounter(electionsEl, data.elections_held, '');
+            animateCounter(turnoutEl, data.avg_turnout, '%');
+            animateCounter(securityEl, data.security_incidents, '');
+        })
+        .catch(err => console.error('Stats load error:', err));
+</script>
+
+<style>
+    /* Parallax floating shapes */
+    .floating-shape {
+        position: absolute;
+        background: rgba(0, 123, 255, 0.1);
+        border-radius: 50%;
+        animation: float 8s infinite ease-in-out;
+        pointer-events: none;
+    }
+    .shape-1 {
+        width: 150px;
+        height: 150px;
+        top: 10%;
+        left: -5%;
+        animation-delay: 0s;
+    }
+    .shape-2 {
+        width: 200px;
+        height: 200px;
+        bottom: 10%;
+        right: -10%;
+        animation-delay: 2s;
+    }
+    .shape-3 {
+        width: 100px;
+        height: 100px;
+        top: 60%;
+        left: 20%;
+        animation-delay: 4s;
+    }
+    @keyframes float {
+        0% { transform: translateY(0px) rotate(0deg); opacity: 0.3; }
+        50% { transform: translateY(-30px) rotate(10deg); opacity: 0.6; }
+        100% { transform: translateY(0px) rotate(0deg); opacity: 0.3; }
+    }
+
+    /* Hover lift effect */
+    .hover-lift {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .hover-lift:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 20px 30px rgba(0,0,0,0.1) !important;
+    }
+
+    /* Step circles */
+    .step-circle {
+        width: 80px;
+        height: 80px;
+        font-size: 2rem;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s;
+    }
+    .step-circle:hover {
+        transform: scale(1.05);
+        background-color: #0d6efd !important;
+    }
+
+    /* Dark mode adjustments */
+    body.dark-mode .hero-section {
+        background: linear-gradient(135deg, #1a1f2e 0%, #0a0f1c 100%);
+    }
+    body.dark-mode .stats-section,
+    body.dark-mode .upcoming-section {
+        background-color: #121826 !important;
+    }
+    body.dark-mode .card {
+        background-color: #1e2434;
+        color: #e0e0e0;
+    }
+    body.dark-mode .text-muted {
+        color: #aaa !important;
+    }
+    body.dark-mode .cta-section {
+        background-color: #0b5ed7 !important;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .floating-shape {
+            display: none;
+        }
+        .step-circle {
+            width: 60px;
+            height: 60px;
+            font-size: 1.5rem;
+        }
+        .hero-section h1 {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}

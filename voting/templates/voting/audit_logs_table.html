@@ -1,0 +1,413 @@
+{% if logs %}
+<div class="audit-card">
+    <div class="audit-card-header">
+        <h4 class="audit-title">Audit Logs</h4>
+        <div class="audit-controls">
+            <div class="search-box">
+                <i class="bi bi-search"></i>
+                <input type="text" id="searchInput" class="form-control" placeholder="Search logs...">
+            </div>
+            <button id="exportCsvBtn" class="btn-export">
+                <i class="bi bi-download"></i> Export CSV
+            </button>
+        </div>
+    </div>
+
+    <div class="table-responsive-wrapper">
+        <table class="audit-table" id="auditTable">
+            <thead>
+                <tr>
+                    <th data-sort="user">User <i class="bi bi-arrow-up-short"></i></th>
+                    <th data-sort="action">Action <i class="bi bi-arrow-up-short"></i></th>
+                    <th data-sort="ip">IP Address <i class="bi bi-arrow-up-short"></i></th>
+                    <th data-sort="timestamp">Timestamp <i class="bi bi-arrow-up-short"></i></th>
+                </tr>
+            </thead>
+            <tbody id="auditTableBody">
+                {% for log in logs %}
+                <tr class="audit-row">
+                    <td data-label="User">{{ log.user|default:"Anonymous" }}</td>
+                    <td data-label="Action"><span class="badge-action">{{ log.action }}</span></td>
+                    <td data-label="IP">{{ log.ip_address|default:"—" }}</td>
+                    <td data-label="Timestamp">{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination controls -->
+    <div class="audit-pagination">
+        <div class="pagination-info">
+            Show 
+            <select id="pageSizeSelect">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="-1">All</option>
+            </select>
+            entries
+        </div>
+        <div class="pagination-buttons">
+            <button id="prevPageBtn" class="page-btn" disabled><i class="bi bi-chevron-left"></i> Previous</button>
+            <span id="pageInfo" class="page-info">Page 1 of 1</span>
+            <button id="nextPageBtn" class="page-btn" disabled>Next <i class="bi bi-chevron-right"></i></button>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Modern card styles */
+    .audit-card {
+        background: #ffffff;
+        border-radius: 20px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+        padding: 1.5rem;
+        margin: 1.5rem 0;
+        transition: all 0.3s ease;
+    }
+    .audit-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #eef2f6;
+    }
+    .audit-title {
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: #0a58ca;
+        margin: 0;
+        position: relative;
+    }
+    .audit-title:after {
+        content: '';
+        position: absolute;
+        bottom: -0.5rem;
+        left: 0;
+        width: 50px;
+        height: 3px;
+        background: #198754;
+        border-radius: 3px;
+    }
+    .audit-controls {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .search-box {
+        position: relative;
+        min-width: 250px;
+    }
+    .search-box i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        pointer-events: none;
+    }
+    .search-box input {
+        padding-left: 2.2rem;
+        border-radius: 40px;
+        border: 1px solid #dee2e6;
+        transition: all 0.2s;
+    }
+    .search-box input:focus {
+        border-color: #0a58ca;
+        box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.15);
+        outline: none;
+    }
+    .btn-export {
+        background: #198754;
+        color: white;
+        border: none;
+        padding: 0.4rem 1.2rem;
+        border-radius: 40px;
+        font-size: 0.9rem;
+        transition: transform 0.2s, background 0.2s;
+    }
+    .btn-export:hover {
+        background: #0f673f;
+        transform: scale(1.02);
+    }
+    /* Table styles */
+    .table-responsive-wrapper {
+        overflow-x: auto;
+        border-radius: 16px;
+        margin-bottom: 1rem;
+    }
+    .audit-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+    .audit-table thead th {
+        background: #f8fafc;
+        padding: 1rem;
+        font-weight: 600;
+        color: #1e293b;
+        border-bottom: 2px solid #e2e8f0;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.2s;
+    }
+    .audit-table thead th:hover {
+        background: #eef2ff;
+    }
+    .audit-table tbody tr {
+        transition: background 0.2s, transform 0.1s;
+        animation: fadeIn 0.3s ease-out;
+    }
+    .audit-table tbody tr:hover {
+        background: #f1f5f9;
+    }
+    .audit-table td {
+        padding: 0.9rem 1rem;
+        border-bottom: 1px solid #edf2f7;
+        vertical-align: middle;
+    }
+    .badge-action {
+        background: #e9ecef;
+        color: #495057;
+        padding: 0.3rem 0.7rem;
+        border-radius: 30px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        display: inline-block;
+    }
+    /* Pagination */
+    .audit-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1rem;
+        padding-top: 0.5rem;
+    }
+    .pagination-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+        color: #475569;
+    }
+    .pagination-info select {
+        padding: 0.25rem 0.5rem;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        background: white;
+    }
+    .pagination-buttons {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .page-btn {
+        background: #f1f5f9;
+        border: none;
+        padding: 0.4rem 1rem;
+        border-radius: 30px;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+    .page-btn:not(:disabled):hover {
+        background: #e2e8f0;
+        transform: translateY(-1px);
+    }
+    .page-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .page-info {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #0f172a;
+    }
+    /* Mobile responsive */
+    @media (max-width: 768px) {
+        .audit-card {
+            padding: 1rem;
+        }
+        .audit-table thead {
+            display: none;
+        }
+        .audit-table tbody tr {
+            display: block;
+            margin-bottom: 1rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 0.5rem;
+            background: white;
+        }
+        .audit-table tbody td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.6rem;
+            border: none;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .audit-table tbody td:before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #0a58ca;
+            margin-right: 1rem;
+        }
+        .audit-pagination {
+            flex-direction: column;
+            align-items: stretch;
+        }
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+
+<script>
+    (function() {
+        // Get table body and rows
+        const tbody = document.getElementById('auditTableBody');
+        let rows = Array.from(tbody.querySelectorAll('tr.audit-row'));
+        let filteredRows = [...rows];
+        let currentPage = 1;
+        let pageSize = 25;
+        let currentSort = { column: null, direction: 'asc' };
+
+        // Helper functions
+        function updateTableDisplay() {
+            // Paginate filteredRows
+            const start = (currentPage - 1) * pageSize;
+            const end = pageSize === -1 ? filteredRows.length : start + pageSize;
+            const pageRows = filteredRows.slice(start, end);
+            // Clear tbody and append page rows
+            tbody.innerHTML = '';
+            pageRows.forEach(row => tbody.appendChild(row));
+            // Update pagination controls
+            const totalPages = pageSize === -1 ? 1 : Math.ceil(filteredRows.length / pageSize);
+            document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages || 1}`;
+            const prevBtn = document.getElementById('prevPageBtn');
+            const nextBtn = document.getElementById('nextPageBtn');
+            prevBtn.disabled = currentPage === 1;
+            nextBtn.disabled = currentPage === totalPages || totalPages === 0;
+        }
+
+        function filterRows() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            filteredRows = rows.filter(row => {
+                const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+                return text.includes(searchTerm);
+            });
+            currentPage = 1;
+            if (currentSort.column) {
+                sortRows(currentSort.column, currentSort.direction);
+            } else {
+                updateTableDisplay();
+            }
+        }
+
+        function sortRows(column, direction) {
+            const colIndex = { user: 0, action: 1, ip: 2, timestamp: 3 }[column];
+            if (colIndex === undefined) return;
+            filteredRows.sort((a, b) => {
+                let aVal = a.cells[colIndex].textContent.trim().toLowerCase();
+                let bVal = b.cells[colIndex].textContent.trim().toLowerCase();
+                if (column === 'timestamp') {
+                    aVal = new Date(a.cells[colIndex].textContent);
+                    bVal = new Date(b.cells[colIndex].textContent);
+                    return direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+                return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            });
+            currentPage = 1;
+            updateTableDisplay();
+        }
+
+        function handleSortClick(column, thElement) {
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+            // Update arrow icons
+            document.querySelectorAll('#auditTable th i').forEach(icon => {
+                icon.className = 'bi bi-arrow-up-short';
+            });
+            const icon = thElement.querySelector('i');
+            if (currentSort.direction === 'asc') {
+                icon.className = 'bi bi-arrow-up-short';
+            } else {
+                icon.className = 'bi bi-arrow-down-short';
+            }
+            sortRows(column, currentSort.direction);
+        }
+
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('keyup', filterRows);
+        document.getElementById('pageSizeSelect').addEventListener('change', (e) => {
+            pageSize = parseInt(e.target.value);
+            if (isNaN(pageSize)) pageSize = -1;
+            currentPage = 1;
+            updateTableDisplay();
+        });
+        document.getElementById('prevPageBtn').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                updateTableDisplay();
+            }
+        });
+        document.getElementById('nextPageBtn').addEventListener('click', () => {
+            const totalPages = pageSize === -1 ? 1 : Math.ceil(filteredRows.length / pageSize);
+            if (currentPage < totalPages) {
+                currentPage++;
+                updateTableDisplay();
+            }
+        });
+        // Sorting headers
+        const headers = document.querySelectorAll('#auditTable th');
+        headers.forEach(th => {
+            const sortKey = th.getAttribute('data-sort');
+            if (sortKey) {
+                th.addEventListener('click', () => handleSortClick(sortKey, th));
+            }
+        });
+        // Export CSV
+        document.getElementById('exportCsvBtn').addEventListener('click', () => {
+            const rowsToExport = filteredRows;
+            const csvData = [['User', 'Action', 'IP Address', 'Timestamp']];
+            rowsToExport.forEach(row => {
+                const rowData = Array.from(row.cells).map(cell => {
+                    let text = cell.textContent.trim();
+                    text = text.replace(/"/g, '""');
+                    return `"${text}"`;
+                });
+                csvData.push(rowData);
+            });
+            const csvContent = csvData.map(row => row.join(',')).join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.download = 'audit_logs.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        });
+
+        // Initial display
+        updateTableDisplay();
+    })();
+</script>
+
+<!-- Bootstrap Icons CDN -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+{% else %}
+    <div class="alert alert-info text-center p-4">No audit logs found.</div>
+{% endif %}
