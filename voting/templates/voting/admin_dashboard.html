@@ -1,150 +1,137 @@
-{% extends 'voting/base.html' %}
-{% load static %}
+{% extends 'voting/admin_base.html' %}
 
-{% block content %}
-<div class="container-fluid">
-    <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="text-primary">Admin Dashboard</h2>
-        <div>
-            <span class="badge bg-primary">{{ active_election.name|default:"No Active Election" }}</span>
-        </div>
-    </div>
+{% block admin_title %}Dashboard{% endblock %}
 
-    <!-- Stats Cards with Animated Counters -->
-    <div class="row mb-4" x-data="counterAnimator()" x-init="initCounters()">
-        <div class="col-md-3 mb-3">
-            <div class="card text-center shadow-sm border-0">
-                <div class="card-body">
-                    <i class="bi bi-people fs-1 text-primary"></i>
-                    <h3 class="mt-2" x-text="votersCount">{{ total_voters }}</h3>
-                    <p class="text-muted mb-0">Total Voters</p>
+{% block admin_content %}
+<!-- New: Django Admin quick link -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card bg-light border-0 shadow-sm">
+            <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <i class="bi bi-database-gear fs-2 text-primary me-2"></i>
+                    <span class="fw-semibold">Advanced system configuration</span>
                 </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card text-center shadow-sm border-0">
-                <div class="card-body">
-                    <i class="bi bi-person-badge fs-1 text-success"></i>
-                    <h3 class="mt-2" x-text="candidatesCount">{{ total_candidates }}</h3>
-                    <p class="text-muted mb-0">Verified Candidates</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card text-center shadow-sm border-0">
-                <div class="card-body">
-                    <i class="bi bi-hourglass-split fs-1 text-warning"></i>
-                    <h3 class="mt-2" x-text="pendingCount">{{ pending_verifications }}</h3>
-                    <p class="text-muted mb-0">Pending Verifications</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="card text-center shadow-sm border-0">
-                <div class="card-body">
-                    <i class="bi bi-check-circle fs-1 text-info"></i>
-                    <h3 class="mt-2" x-text="votesCount">0</h3>
-                    <p class="text-muted mb-0">Votes Cast (Active Election)</p>
-                </div>
+                <a href="/admin/" class="btn btn-primary">
+                    <i class="bi bi-box-arrow-up-right"></i> Open Django Admin Panel
+                </a>
             </div>
         </div>
     </div>
-
-    <!-- Turnout Chart (if active election) -->
-    {% if active_election %}
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">Live Turnout – {{ active_election.name }}</h5>
-        </div>
-        <div class="card-body">
-            <canvas id="turnoutChart" height="80"></canvas>
-            <div class="mt-2 text-center">
-                <span class="badge bg-success" id="turnoutPercent">0%</span> of voters have cast their vote.
+</div>
+<div class="row mb-4" x-data="counterAnimator()" x-init="initCounters()">
+    <div class="col-sm-6 col-lg-3 mb-3">
+        <div class="card text-center shadow-sm h-100 border-0">
+            <div class="card-body">
+                <i class="bi bi-people fs-1 text-primary"></i>
+                <h3 class="mt-2" x-text="votersCount">{{ total_voters }}</h3>
+                <p class="text-muted mb-0">Total Voters</p>
             </div>
         </div>
     </div>
-    {% endif %}
-
-    <!-- Quick Action Cards -->
-    <div class="row mb-4">
-        <div class="col-md-6 mb-3">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-light">
-                    <i class="bi bi-person-check"></i> User Management
-                </div>
-                <div class="card-body">
-                    <a href="{% url 'verify_users' %}" class="btn btn-outline-primary mb-2 w-100">Verify Pending Users</a>
-                    <a href="{% url 'verify_candidate' 0 %}" class="btn btn-outline-secondary mb-2 w-100">Verify Candidates</a>
-                    <a href="{% url 'broadcast_notification' %}" class="btn btn-outline-info w-100">Broadcast Notification</a>
-                </div>
+    <div class="col-sm-6 col-lg-3 mb-3">
+        <div class="card text-center shadow-sm h-100 border-0">
+            <div class="card-body">
+                <i class="bi bi-person-badge fs-1 text-success"></i>
+                <h3 class="mt-2" x-text="candidatesCount">{{ total_candidates }}</h3>
+                <p class="text-muted mb-0">Verified Candidates</p>
             </div>
         </div>
-        <div class="col-md-6 mb-3">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-light">
-                    <i class="bi bi-bar-chart"></i> Election Tools
-                </div>
-                <div class="card-body">
-                    <a href="{% url 'live_map' active_election.id|default:1 %}" class="btn btn-outline-primary mb-2 w-100">Live Voter Map</a>
-                    <a href="{% url 'replay_votes' active_election.id|default:1 %}" class="btn btn-outline-secondary mb-2 w-100">Replay Voting Timeline</a>
-                    <a href="{% url 'tally_election' active_election.id|default:1 %}" class="btn btn-outline-success mb-2 w-100">Tally Results (Background)</a>
-                    <a href="{% url 'export_csv' active_election.id|default:1 %}" class="btn btn-outline-danger w-100">Export Results as CSV</a>
+    </div>
+    <div class="col-sm-6 col-lg-3 mb-3">
+        <div class="card text-center shadow-sm h-100 border-0">
+            <div class="card-body">
+                <i class="bi bi-hourglass-split fs-1 text-warning"></i>
+                <h3 class="mt-2" x-text="pendingCount">{{ pending_verifications }}</h3>
+                <p class="text-muted mb-0">Pending</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3 mb-3">
+        <div class="card text-center shadow-sm h-100 border-0">
+            <div class="card-body">
+                <i class="bi bi-check-circle fs-1 text-info"></i>
+                <h3 class="mt-2" x-text="votesCount">{{ votes_cast|default:0 }}</h3>
+                <p class="text-muted mb-0">Votes Cast</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white border-0 pt-3">
+                <h5 class="card-title">Turnout Overview</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="turnoutChart" height="200"></canvas>
+                <div class="text-center mt-2">
+                    <span class="badge bg-success" id="turnoutPercent">0%</span> of voters have voted
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Test Tools & Audit Logs -->
-    <div class="row">
-        <div class="col-md-6 mb-3">
-            <div class="card shadow-sm">
-                <div class="card-header bg-light">
-                    <i class="bi bi-envelope"></i> Test Notifications
-                </div>
-                <div class="card-body">
-                    <a href="{% url 'test_email' %}" class="btn btn-outline-primary mb-2 w-100">Send Test Email</a>
-                    <a href="{% url 'test_sms' %}" class="btn btn-outline-primary w-100">Send Test SMS</a>
-                </div>
+    <div class="col-md-6 mb-3">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white border-0 pt-3">
+                <h5 class="card-title">Candidate Performance</h5>
             </div>
-        </div>
-        <div class="col-md-6 mb-3">
-            <div class="card shadow-sm">
-                <div class="card-header bg-light">
-                    <i class="bi bi-clock-history"></i> Recent Audit Logs
-                </div>
-                <div class="card-header bg-light">
-                    <a href="{% url 'broadcast_log' %}" class="btn btn-info">View Broadcast Log</a>
-                </div>
-                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
-                    {% if recent_logs %}
-                        <ul class="list-group list-group-flush">
-                            {% for log in recent_logs %}
-                                <li class="list-group-item">
-                                    <strong>{{ log.user|default:"System" }}</strong><br>
-                                    <small class="text-muted">{{ log.action }}</small><br>
-                                    <small>{{ log.timestamp|date:"d/m/Y H:i" }}</small>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                        <a href="{% url 'audit_logs' %}" class="btn btn-link">View all logs</a>
-                    {% else %}
-                        <p class="text-muted">No recent logs.</p>
-                    {% endif %}
+            <div class="card-body">
+                <div id="candidateChartContainer" style="height: 200px;">
+                    <canvas id="candidateChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
-    <div class="mt-4">
-        <a href="{% url 'export_voters_csv' %}" class="btn btn-info">Export Voters CSV</a>
-        <a href="{% url 'export_candidates_csv' %}" class="btn btn-info">Export Candidates CSV</a>
-        <a href="{% url 'export_audit_csv' %}" class="btn btn-info">Export Audit Logs CSV</a>
+</div>
+
+<!-- Audit Logs Table (recent) -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white border-0 pt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="card-title mb-0">Recent Audit Logs</h5>
+        <div class="d-flex gap-2">
+            <div class="input-group input-group-sm" style="width: 250px;">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="auditSearch" placeholder="Search logs...">
+            </div>
+            <button class="btn btn-sm btn-outline-primary" id="exportAuditCsv">
+                <i class="bi bi-download"></i> CSV
+            </button>
+            <a href="{% url 'audit_logs' %}" class="btn btn-sm btn-outline-secondary">All</a>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="auditTable">
+                <thead class="bg-light">
+                    <tr>
+                        <th data-sort="user">User <i class="bi bi-arrow-up-short"></i></th>
+                        <th data-sort="action">Action</th>
+                        <th data-sort="ip">IP</th>
+                        <th data-sort="timestamp">Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="auditLogsBody">
+                    {% for log in recent_logs %}
+                    <tr>
+                        <td>{{ log.user|default:"System" }}</td>
+                        <td>{{ log.action }}</td>
+                        <td>{{ log.ip_address|default:"—" }}</td>
+                        <td>{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="text-center text-muted">No recent logs</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // Alpine.js component for animated counters
     function counterAnimator() {
         return {
             votersCount: 0,
@@ -152,7 +139,6 @@
             pendingCount: 0,
             votesCount: 0,
             initCounters() {
-                // Animate to target values
                 this.animateNumber('votersCount', {{ total_voters }});
                 this.animateNumber('candidatesCount', {{ total_candidates }});
                 this.animateNumber('pendingCount', {{ pending_verifications }});
@@ -160,7 +146,7 @@
             },
             animateNumber(property, target) {
                 let current = 0;
-                const step = Math.ceil(target / 50);
+                const step = Math.ceil(target / 40);
                 const interval = setInterval(() => {
                     current += step;
                     if (current >= target) {
@@ -174,39 +160,102 @@
         };
     }
 
-    // Live turnout chart (if active election)
     {% if active_election %}
     const electionId = {{ active_election.id }};
     const totalVoters = {{ total_voters }};
-    const ctx = document.getElementById('turnoutChart').getContext('2d');
-    let turnoutChart;
+    let turnoutChart = null;
 
-    function updateTurnout(data) {
-        const voted = data.voted || 0;
-        const turnout = ((voted / totalVoters) * 100).toFixed(1);
-        document.getElementById('turnoutPercent').innerText = turnout + '%';
+    function initTurnoutChart(voted) {
+        const ctx = document.getElementById('turnoutChart').getContext('2d');
+        turnoutChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Voted', 'Not Voted'],
+                datasets: [{ data: [voted, totalVoters - voted], backgroundColor: ['#28a745', '#dc3545'], borderWidth: 0 }]
+            },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } } }
+        });
+        const percent = totalVoters ? ((voted / totalVoters) * 100).toFixed(1) : 0;
+        document.getElementById('turnoutPercent').innerText = percent + '%';
+    }
+
+    function updateTurnout(voted) {
         if (turnoutChart) {
             turnoutChart.data.datasets[0].data = [voted, totalVoters - voted];
             turnoutChart.update();
         } else {
-            turnoutChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Voted', 'Not Voted'],
-                    datasets: [{ data: [voted, totalVoters - voted], backgroundColor: ['#28a745', '#dc3545'] }]
-                },
-                options: { responsive: true, maintainAspectRatio: true }
-            });
+            initTurnoutChart(voted);
         }
+        const percent = totalVoters ? ((voted / totalVoters) * 100).toFixed(1) : 0;
+        document.getElementById('turnoutPercent').innerText = percent + '%';
     }
 
-    // WebSocket connection for live updates
     const socket = new WebSocket(`ws://${window.location.host}/ws/admin/live/${electionId}/`);
     socket.onmessage = function(e) {
         const data = JSON.parse(e.data);
-        updateTurnout(data);
+        if (data.voted !== undefined) updateTurnout(data.voted);
     };
-    socket.onopen = function() { console.log('WebSocket connected'); };
+    socket.onopen = () => console.log('WebSocket connected');
+    {% else %}
+    new Chart(document.getElementById('turnoutChart').getContext('2d'), {
+        type: 'doughnut',
+        data: { labels: ['Voted', 'Not Voted'], datasets: [{ data: [0, 100], backgroundColor: ['#28a745', '#dc3545'] }] }
+    });
     {% endif %}
+
+    async function loadCandidateChart() {
+        try {
+            const response = await fetch(`/api/replay/{{ active_election.id|default:'0' }}/?json=1`);
+            if (response.ok) {
+                const timeline = await response.json();
+                const candidateVotes = {};
+                timeline.forEach(item => {
+                    if (item.candidate_name) candidateVotes[item.candidate_name] = (candidateVotes[item.candidate_name] || 0) + 1;
+                });
+                const labels = Object.keys(candidateVotes);
+                const data = Object.values(candidateVotes);
+                if (labels.length) {
+                    new Chart(document.getElementById('candidateChart').getContext('2d'), {
+                        type: 'bar',
+                        data: { labels: labels, datasets: [{ label: 'Votes', data: data, backgroundColor: '#0d6efd' }] }
+                    });
+                } else {
+                    document.getElementById('candidateChartContainer').innerHTML = '<p class="text-muted text-center">No votes cast yet.</p>';
+                }
+            } else {
+                document.getElementById('candidateChartContainer').innerHTML = '<p class="text-muted text-center">No data available.</p>';
+            }
+        } catch (error) {
+            document.getElementById('candidateChartContainer').innerHTML = '<p class="text-muted text-center">Could not load candidate performance.</p>';
+        }
+    }
+    if ({{ active_election.id|default:'0' }}) loadCandidateChart();
+
+    // Audit log search & export
+    const auditRows = Array.from(document.querySelectorAll('#auditLogsBody tr')).filter(r => r.cells && r.cells.length === 4);
+    const searchInput = document.getElementById('auditSearch');
+    if (searchInput) {
+        searchInput.addEventListener('keyup', function() {
+            const filter = this.value.toLowerCase();
+            auditRows.forEach(row => {
+                const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+                row.style.display = text.includes(filter) ? '' : 'none';
+            });
+        });
+    }
+    document.getElementById('exportAuditCsv')?.addEventListener('click', () => {
+        const rowsToExport = auditRows.filter(r => r.style.display !== 'none');
+        const csvData = [['User', 'Action', 'IP Address', 'Timestamp']];
+        rowsToExport.forEach(row => {
+            const rowData = Array.from(row.cells).map(cell => `"${cell.textContent.trim().replace(/"/g, '""')}"`);
+            csvData.push(rowData);
+        });
+        const blob = new Blob([csvData.map(r => r.join(',')).join('\n')], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'audit_logs.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    });
 </script>
 {% endblock %}

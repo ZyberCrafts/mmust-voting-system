@@ -1,5 +1,8 @@
-{% extends 'voting/base.html' %}
-{% block content %}
+{% extends 'voting/user_base.html' %}
+
+{% block user_title %}Candidate Questionnaire{% endblock %}
+
+{% block user_content %}
 <div class="container py-4" x-data="candidateQuestionnaire()" x-init="init()">
     <div class="card shadow animate__animated animate__fadeInUp">
         <div class="card-header bg-primary text-white">

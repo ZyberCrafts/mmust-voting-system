@@ -33,7 +33,7 @@ class User(AbstractUser):
     )
 
     role = models.CharField(max_length=20, choices=ROLES, default='voter')
-    voter_id = models.CharField(max_length=20, unique=True, blank=True, db_index=True)
+    voter_id = models.CharField(max_length=30, unique=True, blank=True, db_index=True)
     phone = models.CharField(max_length=15, help_text=_("Mobile phone number for SMS notifications"))
     security_question = models.CharField(max_length=255, choices=SECURITY_QUESTIONS)
     security_answer = models.CharField(max_length=255)

@@ -1,7 +1,7 @@
-{% extends 'voting/base.html' %}
-{% block content %}
+{% extends 'voting/admin_base.html' %}
 
-<div x-data="mapApp()" x-init="initMap()" class="container-fluid px-0">
+{% block admin_content %}
+<div x-data="mapApp()" x-init="initMap()">
     <!-- Header with controls -->
     <div class="row mb-3">
         <div class="col-md-8">
@@ -70,7 +70,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
-<!-- Alpine.js -->
+<!-- Alpine.js (already loaded in base, but kept for safety) -->
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
 <script>
@@ -178,5 +178,4 @@
         };
     }
 </script>
-
 {% endblock %}

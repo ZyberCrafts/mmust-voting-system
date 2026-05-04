@@ -1,20 +1,253 @@
-{% extends 'voting/base.html' %}
+{% extends 'voting/user_base.html' %}
+{% load static %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white">
-                <h3>Your Profile</h3>
+<div class="container py-4" x-data="profileApp()" x-init="init()">
+    <div class="row">
+        <!-- Left Column: Avatar & Camera -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <div class="position-relative d-inline-block">
+                        <img src="{{ user.id_photo.url|default:'/static/images/default-avatar.png' }}" 
+                             class="rounded-circle img-thumbnail" 
+                             style="width: 150px; height: 150px; object-fit: cover;"
+                             id="profileAvatar"
+                             alt="Profile Photo">
+                        <button type="button" class="btn btn-sm btn-primary position-absolute bottom-0 end-0 rounded-circle" 
+                                style="width: 40px; height: 40px;" @click="openCameraModal">
+                            <i class="bi bi-camera-fill"></i>
+                        </button>
+                    </div>
+                    <h4 class="mt-3">{{ user.get_full_name }}</h4>
+                    <p class="text-muted">{{ user.get_role_display }}</p>
+                    <p><strong>Voter ID:</strong> {{ user.voter_id }}</p>
+                    <p><strong>Verified:</strong> 
+                        {% if user.is_verified %}
+                            <span class="badge bg-success">✅ Verified</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">⏳ Pending</span>
+                        {% endif %}
+                    </p>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="post">
-                    {% csrf_token %}
-                    {{ form.as_p }}
-                    <button type="submit" class="btn btn-primary">Update</button>
-                    <a href="{% url 'voting_history' %}" class="btn btn-secondary">View Voting History</a>
-                </form>
+        </div>
+
+        <!-- Right Column: Editable Form -->
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-pencil-square"></i> Edit Profile</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="profileForm">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">First Name</label>
+                                {{ form.first_name }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Last Name</label>
+                                {{ form.last_name }}
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Email</label>
+                                {{ form.email }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Phone</label>
+                                {{ form.phone }}
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Security Question</label>
+                            {{ form.security_question }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Security Answer</label>
+                            {{ form.security_answer }}
+                            <small class="text-muted">Leave blank to keep current answer.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Residence</label>
+                            {{ form.residence }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Polling Station</label>
+                            {{ form.polling_station }}
+                        </div>
+
+                        <!-- Read-only fields (from registration) -->
+                        <hr>
+                        <h6>Registration Information (read-only)</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <strong>Admission Number:</strong> {{ user.admission_number|default:"—" }}
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <strong>Course:</strong> {{ user.course|default:"—" }}
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <strong>Year of Study:</strong> {{ user.year_of_study|default:"—" }}
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <strong>School:</strong> {{ user.school.name|default:"—" }}
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <strong>Department:</strong> {{ user.department.name|default:"—" }}
+                            </div>
+                        </div>
+
+                        {% if user.role == 'candidate' and candidacy %}
+                            <hr>
+                            <h6>Candidacy Information</h6>
+                            <p><strong>Position:</strong> {{ candidacy.position.name }}</p>
+                            <p><strong>Party:</strong> {{ candidacy.party.name|default:"Independent" }}</p>
+                            <p><strong>Status:</strong> {% if candidacy.verified %}✅ Verified{% else %}⏳ Pending{% endif %}</p>
+                        {% endif %}
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Camera Modal for Profile Photo Capture + Crop -->
+    <div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="cameraModalLabel">Update Profile Photo</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-12 text-center mb-3">
+                            <video id="video" width="100%" autoplay style="max-height: 300px; border-radius: 10px; background: #000;"></video>
+                            <canvas id="canvas" style="display: none;"></canvas>
+                            <div id="cropContainer" class="mt-3" style="display: none;">
+                                <img id="capturedImage" class="img-fluid" style="max-height: 300px;">
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-center gap-2">
+                            <button class="btn btn-secondary" id="captureBtn">Take Photo</button>
+                            <button class="btn btn-success" id="cropBtn" style="display: none;">Crop & Save</button>
+                            <button class="btn btn-danger" id="retakeBtn" style="display: none;">Retake</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
+<script>
+    function profileApp() {
+        return {
+            cropper: null,
+            videoStream: null,
+            init() {
+                // Any initialization if needed
+            },
+            openCameraModal() {
+                const modal = new bootstrap.Modal(document.getElementById('cameraModal'));
+                modal.show();
+                this.startCamera();
+            },
+            startCamera() {
+                const video = document.getElementById('video');
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(stream => {
+                        this.videoStream = stream;
+                        video.srcObject = stream;
+                        video.play();
+                        document.getElementById('captureBtn').style.display = 'inline-block';
+                        document.getElementById('cropBtn').style.display = 'none';
+                        document.getElementById('retakeBtn').style.display = 'none';
+                        document.getElementById('cropContainer').style.display = 'none';
+                        video.style.display = 'block';
+                    })
+                    .catch(err => alert('Camera access denied or error: ' + err));
+            },
+            stopCamera() {
+                if (this.videoStream) {
+                    this.videoStream.getTracks().forEach(track => track.stop());
+                }
+            },
+            capturePhoto() {
+                const video = document.getElementById('video');
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageDataURL = canvas.toDataURL('image/jpeg');
+                const capturedImg = document.getElementById('capturedImage');
+                capturedImg.src = imageDataURL;
+                document.getElementById('cropContainer').style.display = 'block';
+                video.style.display = 'none';
+                document.getElementById('captureBtn').style.display = 'none';
+                document.getElementById('cropBtn').style.display = 'inline-block';
+                document.getElementById('retakeBtn').style.display = 'inline-block';
+                if (this.cropper) this.cropper.destroy();
+                this.cropper = new Cropper(capturedImg, {
+                    aspectRatio: 1,
+                    viewMode: 1,
+                    autoCropArea: 1,
+                    dragMode: 'move',
+                });
+            },
+            cropAndSave() {
+                if (this.cropper) {
+                    const croppedCanvas = this.cropper.getCroppedCanvas();
+                    croppedCanvas.toBlob((blob) => {
+                        const formData = new FormData();
+                        formData.append('photo', blob, 'profile.jpg');
+                        fetch('{% url 'update_profile_photo' %}', {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'ok') {
+                                // Update avatar image on page
+                                const avatarUrl = URL.createObjectURL(blob);
+                                document.getElementById('profileAvatar').src = avatarUrl;
+                                alert('Photo updated successfully!');
+                                location.reload(); // or just update the src
+                            } else {
+                                alert('Error: ' + data.message);
+                            }
+                            this.stopCamera();
+                            bootstrap.Modal.getInstance(document.getElementById('cameraModal')).hide();
+                        })
+                        .catch(err => alert('Upload failed: ' + err));
+                    }, 'image/jpeg');
+                }
+            },
+            retake() {
+                if (this.cropper) this.cropper.destroy();
+                document.getElementById('cropContainer').style.display = 'none';
+                document.getElementById('video').style.display = 'block';
+                document.getElementById('captureBtn').style.display = 'inline-block';
+                document.getElementById('cropBtn').style.display = 'none';
+                document.getElementById('retakeBtn').style.display = 'none';
+                // Ensure camera is still streaming
+                if (!this.videoStream) this.startCamera();
+            }
+        };
+    }
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('profileApp', profileApp);
+    });
+</script>
 {% endblock %}

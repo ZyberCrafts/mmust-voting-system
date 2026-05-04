@@ -17,8 +17,6 @@ def validate_kenyan_phone(phone):
     if not re.match(r'^(?:\+254|0|1)[0-9]{9}$', phone):
         raise ValidationError("Phone number must be a valid Kenyan number: +254XXXXXXXXX, 07XXXXXXXX, or 01XXXXXXXX.")
 
-# voting/forms.py (excerpt – replace UserRegistrationForm, CandidateRegistrationForm, UserProfileForm)
-
 # ------------------------------------------------------------------
 # User Registration Form
 # ------------------------------------------------------------------
@@ -79,6 +77,9 @@ class UserRegistrationForm(UserCreationForm):
         else:
             self.fields['department'].queryset = Department.objects.none()
 
+        allowed_roles = [choice for choice in self.fields['role'].choices if choice[0] not in ['admin', 'board']]
+        self.fields['role'].choices = allowed_roles
+        
     def clean_phone(self):
         phone = self.cleaned_data.get('phone')
         if phone:
@@ -137,12 +138,12 @@ class UserRegistrationForm(UserCreationForm):
 
 
 # ------------------------------------------------------------------
-# Candidate Registration Form (UPDATED with hall, gender, school fields)
+# Candidate Registration Form (ENHANCED with hall, gender, school fields)
 # ------------------------------------------------------------------
 class CandidateRegistrationForm(forms.ModelForm):
-    gender = forms.ChoiceField(choices=[('male','Male'),('female','Female')], required=True)
-    hall = forms.ChoiceField(choices=[], required=False)
-    school = forms.ChoiceField(choices=[], required=False)
+    gender = forms.ChoiceField(choices=[('male','Male'),('female','Female')], required=False, label="Gender")
+    hall = forms.ChoiceField(choices=[], required=False, label="Hall")
+    school = forms.ChoiceField(choices=[], required=False, label="School")
 
     class Meta:
         model = Candidate
@@ -156,7 +157,7 @@ class CandidateRegistrationForm(forms.ModelForm):
         self.fields['party'].queryset = Party.objects.all().order_by('name')
         self.fields['party'].empty_label = "Independent (No Party)"
 
-        # Hall choices (will be overwritten by JS but kept for validation)
+        # Hall choices (populated for validation)
         self.fields['hall'].choices = [
             ('hall1_male', 'Hall 1 (Male)'),
             ('hall2_male', 'Hall 2 (Male)'),
@@ -175,38 +176,46 @@ class CandidateRegistrationForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        gender = cleaned_data.get('gender')
         position = cleaned_data.get('position')
-        if not position:
-            return cleaned_data
-        pos_name = position.name if hasattr(position, 'name') else str(position)
+        metadata = {}
 
-        metadata = {'gender': gender}
+        if position:
+            pos_name = position.name if hasattr(position, 'name') else str(position)
 
-        if pos_name == 'President (Party Ticket)':
-            if not cleaned_data.get('party'):
-                self.add_error('party', 'Party is required for presidential candidate.')
-            metadata['is_party_presidential_candidate'] = True
-        elif 'Hall' in pos_name:
-            hall = cleaned_data.get('hall')
-            if not hall:
-                self.add_error('hall', 'Hall selection is required for Hall Representative.')
-            # Validate hall matches gender
-            hall_gender = 'male' if 'male' in hall else 'female'
-            if hall_gender != gender:
-                self.add_error('hall', f'Selected hall does not match your gender ({gender}).')
-            metadata['hall'] = hall
-        elif 'School Representative' in pos_name:
-            school = cleaned_data.get('school')
-            if not school:
-                self.add_error('school', 'School selection is required.')
-            metadata['school'] = school
-        elif 'Non-resident' in pos_name:
-            # no extra field
-            pass
-        else:
-            # any other position – no extra fields
-            pass
+            if pos_name == 'President (Party Ticket)':
+                if not cleaned_data.get('party'):
+                    self.add_error('party', 'Party is required for presidential candidate.')
+                metadata['is_party_presidential_candidate'] = True
+
+            elif 'Hall' in pos_name:
+                hall = cleaned_data.get('hall')
+                if not hall:
+                    self.add_error('hall', 'Hall selection is required for Hall Representative.')
+                # Determine expected gender from hall choice
+                if hall:
+                    hall_gender = 'male' if 'male' in hall else 'female'
+                    gender = cleaned_data.get('gender')
+                    if gender and gender != hall_gender:
+                        self.add_error('hall', f'Selected hall does not match your gender ({gender}).')
+                metadata['hall'] = hall
+                if hall:
+                    metadata['gender'] = 'male' if 'male' in hall else 'female'
+
+            elif 'School Representative' in pos_name:
+                school = cleaned_data.get('school')
+                gender = cleaned_data.get('gender')
+                if not school:
+                    self.add_error('school', 'School selection is required for School Representative.')
+                if not gender:
+                    self.add_error('gender', 'Gender selection is required for School Representative.')
+                metadata['school'] = school
+                metadata['gender'] = gender
+
+            elif 'Non-resident' in pos_name:
+                gender = cleaned_data.get('gender')
+                if not gender:
+                    self.add_error('gender', 'Gender selection is required for Non-resident Representative.')
+                metadata['gender'] = gender
 
         cleaned_data['candidate_metadata'] = metadata
         return cleaned_data
@@ -218,7 +227,7 @@ class CandidateRegistrationForm(forms.ModelForm):
 class UserProfileForm(forms.ModelForm):
     class Meta:
         model = User
-        fields = ['email', 'phone', 'security_question', 'security_answer', 'residence', 'polling_station']
+        fields = ['first_name', 'last_name', 'email', 'phone', 'security_question', 'security_answer', 'residence', 'polling_station']
         widgets = {
             'security_question': forms.Select(choices=User.SECURITY_QUESTIONS, attrs={'class': 'form-select'}),
             'security_answer': forms.PasswordInput(render_value=True, attrs={'placeholder': 'Leave blank to keep current'}),
@@ -245,7 +254,6 @@ class UserProfileForm(forms.ModelForm):
     def clean_email(self):
         email = self.cleaned_data.get('email')
         if email:
-            # Allow @mmust.ac.ke and any subdomain like @student.mmust.ac.ke, @staff.mmust.ac.ke
             if not (email.lower().endswith('@mmust.ac.ke') or email.lower().endswith('.mmust.ac.ke')):
                 raise ValidationError("Please use your official MMUST email address (e.g., @mmust.ac.ke or @student.mmust.ac.ke).")
         return email
@@ -443,12 +451,9 @@ class FeedbackForm(forms.ModelForm):
             raise ValidationError("Rating must be between 1 and 5.")
         return rating
 
-class ContactForm(forms.Form):
-    name = forms.CharField(max_length=100, widget=forms.TextInput(attrs={'placeholder': 'Your full name', 'class': 'form-control'}))
-    email = forms.EmailField(widget=forms.EmailInput(attrs={'placeholder': 'Your email address', 'class': 'form-control'}))
-    subject = forms.CharField(max_length=200, widget=forms.TextInput(attrs={'placeholder': 'Subject', 'class': 'form-control'}))
-    message = forms.CharField(widget=forms.Textarea(attrs={'rows': 5, 'placeholder': 'Your message...', 'class': 'form-control'}))
-
+# ------------------------------------------------------------------
+# Contact Form (only one, ModelForm)
+# ------------------------------------------------------------------
 class ContactForm(forms.ModelForm):
     class Meta:
         model = ContactMessage

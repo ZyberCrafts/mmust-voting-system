@@ -139,11 +139,6 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'voting.tasks.check_ended_elections',
         'schedule': 60.0,  # every 60 seconds
     },
-    'send-rating-reminders': {
-        'task': 'accountability.tasks.send_rating_reminders',
-        'schedule': 3600,  # every hour – but you'd call it per session.
-        # Better: schedule a management command that iterates over active sessions and sends reminders once per day.
-    },
 }
 
 # WebPush

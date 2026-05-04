@@ -1,6 +1,6 @@
-{% extends 'voting/base.html' %}
+{% extends 'voting/admin_base.html' %}
 
-{% block content %}
+{% block admin_content %}
 <div class="row justify-content-center" x-data="broadcast()">
     <div class="col-md-8">
         <div class="card shadow">
@@ -75,7 +75,7 @@
                         <div class="form-text" x-show="viaSms">⚠️ SMS messages are limited to 160 characters.</div>
                     </div>
 
-                    <!-- Preview (optional) -->
+                    <!-- Preview -->
                     <div class="mb-3" x-show="subject || message">
                         <hr>
                         <h5>Preview</h5>
@@ -140,12 +140,10 @@ function broadcast() {
             this.charCount = this.message.length;
         },
         confirmSend() {
-            // Show modal
             new bootstrap.Modal(document.getElementById('confirmModal')).show();
         },
         submitForm() {
             this.isSending = true;
-            // Submit the form programmatically
             document.querySelector('form').submit();
         }
     }
@@ -153,7 +151,7 @@ function broadcast() {
 </script>
 
 <style>
-/* Inline custom animations */
+/* Keep your original styles, but adjust modal text for dark mode */
 .card {
     transition: transform 0.2s ease-in-out;
 }
@@ -170,8 +168,13 @@ function broadcast() {
     background-color: #0000ff;
     border-color: #0000ff;
 }
+/* Ensure modal text is visible in both light/dark modes */
+.modal-content {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+}
 .modal-body, .modal-body p, .modal-body label {
-        color: #000000 !important;
-    }
+    color: var(--text-color) !important;
+}
 </style>
 {% endblock %}

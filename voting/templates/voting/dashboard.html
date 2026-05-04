@@ -1,5 +1,8 @@
-{% extends 'voting/base.html' %}
-{% block content %}
+{% extends 'voting/user_base.html' %}
+{% block user_title %}Dashboard{% endblock %}
+{% block user_content %}
+
+<!-- ========== ORIGINAL DASHBOARD CONTENT (for non‑staff) ========== -->
 <div x-data="dashboard()" x-init="init()" class="row">
     <!-- Main Card -->
     <div class="col-lg-12 mb-4">
@@ -7,8 +10,7 @@
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h4 class="mb-0">Welcome, {{ user.get_full_name|default:user.username }}</h4>
                 <span class="badge bg-light text-dark">
-                    {% if user.is_superuser or user.is_staff %}Admin
-                    {% else %}{{ user.get_role_display }}{% endif %}
+                    {{ user.get_role_display }}
                 </span>
             </div>
             <div class="card-body">
@@ -40,16 +42,15 @@
                         {% endif %}
                     </div>
                     <div class="col-md-6">
-                        <!-- (optional extra info, kept empty but could be used for announcements) -->
+                        <!-- optional extra info -->
                     </div>
                 </div>
 
-                <!-- REPLACED CANDIDATE BLOCK START (with questionnaire link) -->
+                <!-- Candidate Area -->
                 {% if user.role == 'candidate' %}
                     <hr>
                     <h5>Candidate Area</h5>
                     {% if candidacy %}
-                        <!-- Existing candidate info -->
                         <div class="row">
                             <div class="col-md-6">
                                 <p><strong>Position:</strong> {{ candidacy.position.name }}</p>
@@ -66,7 +67,6 @@
                                 <a href="{% url 'candidate_profile' candidacy.id %}" class="btn btn-sm btn-outline-primary">View Profile</a>
                             </div>
                         </div>
-                        <!-- Questionnaire alert (updated wording as requested) -->
                         {% if not candidacy.questionnaire_completed %}
                             <div class="alert alert-warning mt-3">
                                 <i class="bi bi-exclamation-triangle"></i>
@@ -74,7 +74,6 @@
                             </div>
                         {% endif %}
                     {% else %}
-                        <!-- No candidacy yet – prompt to register -->
                         <div class="alert alert-info">
                             <i class="bi bi-info-circle"></i> 
                             You have not registered for any position yet. 
@@ -82,8 +81,8 @@
                         </div>
                     {% endif %}
                 {% endif %}
-                <!-- REPLACED CANDIDATE BLOCK END -->
 
+                <!-- Polling Officer Status -->
                 {% if user.role == 'polling_officer' %}
                     <hr>
                     <h5>Polling Officer Status</h5>
@@ -104,7 +103,7 @@
         </div>
     </div>
 
-    <!-- Live Election Dashboard (visible to all authenticated users when election is ongoing) -->
+    <!-- Live Election Dashboard (visible when election is ongoing) -->
     {% if election and election.is_ongoing %}
     <div class="col-12 mb-4">
         <div class="card shadow border-0">
@@ -146,36 +145,9 @@
             </div>
         </div>
     {% endif %}
-
-    <!-- Admin Quick Links (if staff) -->
-    {% if user.is_staff %}
-        <div class="col-12 mt-3">
-            <div class="card shadow border-0">
-                <div class="card-header bg-secondary text-white">Admin Tools</div>
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-md-3 mb-2">
-                            <a href="{% url 'verify_users' %}" class="btn btn-outline-primary w-100">Verify Users</a>
-                        </div>
-                        <div class="col-md-3 mb-2">
-                            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-primary w-100">Admin Dashboard</a>
-                        </div>
-                        {% if election %}
-                            <div class="col-md-3 mb-2">
-                                <a href="{% url 'live_map' election.id %}" class="btn btn-outline-primary w-100">Live Map</a>
-                            </div>
-                            <div class="col-md-3 mb-2">
-                                <a href="{% url 'replay_votes' election.id %}" class="btn btn-outline-primary w-100">Replay Voting</a>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-    {% endif %}
 </div>
 
-<!-- Toast container for verification status change notification -->
+<!-- Toast container -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
     <div id="verificationToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000">
         <div class="d-flex">
@@ -188,7 +160,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 <script>
-    // Countdown timer for upcoming elections (kept from original)
+    // Countdown timer
     function countdown(endTime) {
         return {
             days: 0, hours: 0, minutes: 0, seconds: 0,
@@ -199,7 +171,7 @@
                     const diff = end - now;
                     if (diff <= 0) {
                         this.days = this.hours = this.minutes = this.seconds = 0;
-                        location.reload(); // election just started
+                        location.reload();
                         return;
                     }
                     this.days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -213,7 +185,7 @@
         };
     }
 
-    // Alpine component for dynamic verification status
+    // Alpine component
     function dashboard() {
         return {
             verificationStatus: 'Loading...',
@@ -221,16 +193,11 @@
             previousVerified: null,
             init() {
                 this.fetchStatus();
-                setInterval(() => this.fetchStatus(), 30000); // poll every 30s
+                setInterval(() => this.fetchStatus(), 30000);
             },
             fetchStatus() {
                 fetch('/api/user/status/')
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                        }
-                        return response.json();
-                    })
+                    .then(response => response.json())
                     .then(data => {
                         const isVerified = data.is_verified;
                         if (isVerified) {
@@ -255,28 +222,22 @@
         };
     }
 
-    // Register the Alpine component
     document.addEventListener('alpine:init', () => {
         Alpine.data('dashboard', dashboard);
     });
 
-    // Live WebSocket connection for all users (public + admin)
+    // WebSocket
     {% if election and election.is_ongoing %}
         const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
         const socket = new WebSocket(`${wsScheme}://${window.location.host}/ws/live/{{ election.id }}/`);
         const charts = {};
-
         socket.onmessage = function(e) {
             const data = JSON.parse(e.data);
-            // Update turnout
             document.getElementById('turnoutPercent').innerText = data.turnout + '%';
             document.getElementById('votedCount').innerText = data.voted;
             document.getElementById('liveTimestamp').innerHTML = new Date(data.timestamp).toLocaleTimeString();
-
-            // Update candidate charts
             for (const [position, candidates] of Object.entries(data.candidates)) {
                 if (!charts[position]) {
-                    // Create a new canvas for this position
                     const container = document.getElementById('candidateCharts');
                     const card = document.createElement('div');
                     card.className = 'card mb-3';
@@ -293,7 +254,6 @@
                         options: { responsive: true, maintainAspectRatio: true }
                     });
                 } else {
-                    // Update existing chart
                     charts[position].data.datasets[0].data = candidates.map(c => c.count);
                     charts[position].update();
                 }
@@ -301,4 +261,5 @@
         };
     {% endif %}
 </script>
+
 {% endblock %}

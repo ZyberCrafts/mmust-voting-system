@@ -1,7 +1,9 @@
-{% extends 'voting/base.html' %}
+{% extends 'voting/user_base.html' %}
 {% load static %}
 
-{% block content %}
+{% block user_title %}Register as Candidate{% endblock %}
+
+{% block user_content %}
 <div x-data="candidateForm()" x-init="init()" class="row justify-content-center">
     <div class="col-md-8 col-lg-7">
         <div class="card shadow animate__animated animate__fadeInUp">

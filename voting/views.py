@@ -1,5 +1,3 @@
-# voting/views.py (final, with updated verify_users)
-
 import json
 import logging
 import csv
@@ -18,7 +16,6 @@ from django.utils import timezone
 from django.db import models
 from django.core.paginator import Paginator
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
 from django.core.mail import send_mail
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -54,7 +51,15 @@ def get_location_from_ip(ip):
         return data.get('latitude'), data.get('longitude')
     except Exception:
         return None, None
+from django_ratelimit.decorators import ratelimit
+
+@ratelimit(key='ip', rate='5/m', method='POST')
 def login_view(request):
+    # Check if rate limit was exceeded
+    if getattr(request, 'limited', False):
+        messages.error(request, "Too many login attempts. Try later.")
+        return render(request, 'voting/login.html')
+
     if request.user.is_authenticated:
         return redirect('dashboard')
     if request.method == 'POST':
@@ -68,37 +73,37 @@ def login_view(request):
                 if not security_answer or security_answer.lower() != 'mmust':
                     messages.error(request, "Invalid security code for admin access.")
                     return render(request, 'voting/login.html')
+
+                # 2FA: check if the user has a confirmed TOTP device
+                device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+                if device:
+                    # Store user ID in session and redirect to 2FA verification
+                    request.session['pre_2fa_user_id'] = user.id
+                    return redirect('verify_2fa')
+                else:
+                    # No TOTP device – redirect to 2FA setup (first time)
+                    request.session['pre_2fa_user_id'] = user.id
+                    return redirect('admin_2fa_setup')
+
             else:
-                # Regular users: ask only if voting is ongoing
+                # Regular users: ask security answer only if voting is ongoing
                 election = get_active_election()
                 if election and election.is_ongoing():
                     if not security_answer or security_answer.lower() != user.security_answer.lower():
                         messages.error(request, "Incorrect security answer for voting period.")
                         return render(request, 'voting/login.html')
-
-            login(request, user)
-            log_audit(user, "User logged in", request)
-
-            # Remember me functionality
-            if request.POST.get('remember_me'):
-                request.session.set_expiry(1209600)
-            else:
-                request.session.set_expiry(0)
-
-            # 2FA for staff (optional – if you have implemented it)
-            if user.is_staff:
-                try:
-                    from django_otp.plugins.otp_totp.models import TOTPDevice
-                    if not TOTPDevice.objects.filter(user=user, confirmed=True).exists():
-                        return redirect('admin_2fa_setup')
-                except ImportError:
-                    # If django-otp is not fully configured, skip 2FA
-                    pass
-
-            return redirect('dashboard')
+                # No 2FA for regular users – log in immediately
+                login(request, user)
+                # Remember me functionality
+                if request.POST.get('remember_me'):
+                    request.session.set_expiry(1209600)
+                else:
+                    request.session.set_expiry(0)
+                return redirect('dashboard')
         else:
             messages.error(request, "Invalid username or password.")
     return render(request, 'voting/login.html')
+
 def landing(request):
     """Public landing page."""
     # If user is already logged in, redirect to dashboard
@@ -144,6 +149,14 @@ def register(request):
             user = form.save(commit=False)
             user.is_verified = False
             user.save()
+            # Auto‑approve if admission number matches COM/B/01-00xxx/2022 pattern
+            import re
+            pattern = r'^COM/B/01-00(\d{3})/2022$'  # expects 3 digits after 00
+            if re.match(pattern, user.admission_number):
+                user.is_verified = True
+                user.save()
+                # Optionally send a welcome notification
+                send_notification(user, "Account Auto‑Verified", "Your account has been automatically verified. You can now vote.")      
             face_data = request.POST.get('face_data')
             if face_data:
                 store_face_embedding(user, face_data)
@@ -718,36 +731,6 @@ def admin_dashboard(request):
         'recent_logs': recent_logs,
     })
 
-# --- MODIFIED verify_users view ---
-@login_required
-@admin_required
-def verify_users(request):
-    users = User.objects.filter(is_verified=False).order_by('-created_at')
-    users_list = []
-    for u in users:
-        users_list.append({
-            'id': u.id,
-            'username': u.username,
-            'email': u.email,
-            'role_display': u.get_role_display(),
-            'created_at': u.created_at.isoformat(),
-        })
-    import json
-    users_json = json.dumps(users_list)
-    if request.method == 'POST':
-        user_ids = request.POST.getlist('verify')
-        if user_ids:
-            # The POST may send a comma-separated string from the hidden input
-            if len(user_ids) == 1 and ',' in user_ids[0]:
-                user_ids = user_ids[0].split(',')
-            User.objects.filter(id__in=user_ids).update(is_verified=True)
-            messages.success(request, f"{len(user_ids)} users verified.")
-        return redirect('verify_users')
-    return render(request, 'voting/verify_users.html', {'users': users, 'users_json': users_json})
-# --- end of modified verify_users ---
-
-from .tasks import send_notification_task  # add this import at the top of your views.py
-
 @login_required
 @admin_required
 def broadcast_notification(request):
@@ -925,7 +908,35 @@ def profile(request):
             return redirect('profile')
     else:
         form = UserProfileForm(instance=user)
-    return render(request, 'voting/profile.html', {'form': form})
+    
+    # Additional user data for template (read-only fields)
+    context = {
+        'form': form,
+        'user': user,
+        'schools': School.objects.all(),
+        'departments': Department.objects.filter(school=user.school) if user.school else Department.objects.none(),
+        'candidacy': getattr(user, 'candidacy', None),
+    }
+    return render(request, 'voting/profile.html', context)
+
+@login_required
+def update_profile_photo(request):
+    """AJAX endpoint to update profile photo from camera capture (cropped)."""
+    if request.method == 'POST' and request.FILES.get('photo'):
+        photo = request.FILES['photo']
+        # Validate image type and size
+        if photo.content_type not in ['image/jpeg', 'image/png']:
+            return JsonResponse({'status': 'error', 'message': 'Invalid image format. Use JPEG or PNG.'}, status=400)
+        if photo.size > 5 * 1024 * 1024:
+            return JsonResponse({'status': 'error', 'message': 'Image too large. Max 5MB.'}, status=400)
+        # Save to user.id_photo
+        request.user.id_photo.save(f"profile_{request.user.id}.jpg", photo)
+        photo.seek(0)
+        img_bytes = photo.read()
+        img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+        success = store_face_embedding(request.user, img_base64)
+        return JsonResponse({'status': 'ok', 'message': 'Photo updated successfully.', 'embedding_stored': success})
+    return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
 
 @login_required
 def voting_history(request):
@@ -1080,14 +1091,10 @@ def admin_2fa_setup(request):
             device.confirmed = True
             device.save()
             messages.success(request, "Two‑Factor Authentication enabled successfully (validity: 2 minutes).")
-            return redirect('admin_dashboard')
+            return redirect('verify_2fa')
         else:
             messages.error(request, "Invalid token. Please try again.")
 
-    # Generate QR code (same as before)
-    import qrcode
-    from io import BytesIO
-    import base64
     config_url = device.config_url
     qr = qrcode.make(config_url)
     buffer = BytesIO()
@@ -1300,6 +1307,39 @@ def verify_officer_ajax(request, user_id):
     except User.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Officer not found'}, status=404)
     
+def verify_2fa(request):
+    """Verify TOTP code after login, before final authentication."""
+    user_id = request.session.get('pre_2fa_user_id')
+    if not user_id:
+        messages.error(request, "Session expired. Please log in again.")
+        return redirect('login')
+    user = get_object_or_404(User, id=user_id)
+    # If already authenticated (should not happen), just redirect
+    if request.user.is_authenticated and request.user != user:
+        logout(request)
+
+    if request.method == 'POST':
+        token = request.POST.get('token', '').strip()
+        device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+        if device and device.verify_token(token):
+            login(request, user)
+            # Clean up session
+            del request.session['pre_2fa_user_id']
+            # Remember me
+            if request.POST.get('remember_me'):
+                request.session.set_expiry(1209600)
+            else:
+                request.session.set_expiry(0)
+            messages.success(request, f"Welcome back, {user.get_full_name()}!")
+            # Redirect staff to admin dashboard, others to regular dashboard
+            if user.is_staff:
+                return redirect('admin_dashboard')
+            else:
+                return redirect('dashboard')
+        else:
+            messages.error(request, "Invalid authentication code. Please try again.")
+    return render(request, 'voting/verify_2fa.html', {'user': user})
+
 @login_required
 def user_status_api(request):
     """Return JSON with user's verification status and role."""
@@ -1391,4 +1431,3 @@ def handler404(request, exception):
 
 def handler500(request):
     return render(request, '500.html', status=500)
-

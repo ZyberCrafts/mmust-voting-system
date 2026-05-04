@@ -1,6 +1,7 @@
-{% extends 'voting/base.html' %}
-{% block content %}
-<div class="container">
+{% extends 'voting/admin_base.html' %}
+
+{% block admin_content %}
+<div>
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="text-adaptive">Broadcast Log</h2>
         <form method="post" action="{% url 'clear_broadcast_log' %}" style="display:inline;">
@@ -35,7 +36,7 @@
                     <td class="text-adaptive">{{ log.created_at|date:"Y-m-d H:i" }}</td>
                 </tr>
                 {% empty %}
-                <td><td colspan="4" class="text-center">No records found.</td></tr>
+                <tr><td colspan="4" class="text-center">No records found.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

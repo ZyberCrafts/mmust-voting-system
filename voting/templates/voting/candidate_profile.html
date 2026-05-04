@@ -1,7 +1,9 @@
-{% extends 'voting/base.html' %}
+{% extends 'voting/user_base.html' %}
 {% load static %}
 
-{% block content %}
+{% block user_title %}Candidate Profile{% endblock %}
+
+{% block user_content %}
 <div class="container py-4">
     <!-- Candidate Profile Card -->
     <div class="card shadow-lg border-0 overflow-hidden animate__animated animate__fadeInUp" 

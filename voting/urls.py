@@ -36,7 +36,8 @@ urlpatterns = [
     path('profile/votes/', views.voting_history, name='voting_history'),
     path('vote/receipt/', views.check_receipt, name='check_receipt'),
     path('feedback/<int:election_id>/', views.feedback, name='feedback'),
-
+    path('profile/update-photo/', views.update_profile_photo, name='update_profile_photo'),
+    
     # ---------- Candidate ----------
     path('candidate/register/', views.candidate_register, name='candidate_register'),
     path('candidate/withdraw/', views.candidate_withdraw, name='candidate_withdraw'),
@@ -72,6 +73,7 @@ urlpatterns = [
     path('admin-2fa-setup/', views.admin_2fa_setup, name='admin_2fa_setup'),
     path('admin-panel/broadcast-log/', views.broadcast_log, name='broadcast_log'),
     path('admin-panel/broadcast-log/clear/', views.clear_broadcast_log, name='clear_broadcast_log'),
+    path('verify-2fa/', views.verify_2fa, name='verify_2fa'),
     
     # Admin exports
     path('admin-panel/export/voters/', views.export_voters_csv, name='export_voters_csv'),

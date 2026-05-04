@@ -1,8 +1,8 @@
-{% extends 'voting/base.html' %}
+{% extends 'voting/admin_base.html' %}
 {% load static %}
 
-{% block content %}
-<div x-data="verifyUsers()" x-init="init()" class="container-fluid px-0">
+{% block admin_content %}
+<div x-data="verifyUsers()" x-init="init()">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="text-primary">User Verification</h2>
     </div>
@@ -50,7 +50,7 @@
         </div>
     </div>
 
-    <!-- Candidates Table (unchanged, links to separate page) -->
+    <!-- Candidates Table -->
     <div x-show="activeTab === 'candidates'">
         <div class="card shadow">
             <div class="card-body p-0">
@@ -103,14 +103,14 @@
             </div>
         </div>
     </div>
-</div>
 
-<!-- Toast Container -->
-<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-    <div id="liveToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000">
-        <div class="d-flex">
-            <div class="toast-body" id="toastMessage">User verified successfully!</div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    <!-- Toast Container (copied as‑is) -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+        <div id="liveToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000">
+            <div class="d-flex">
+                <div class="toast-body" id="toastMessage">User verified successfully!</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
         </div>
     </div>
 </div>
@@ -138,7 +138,7 @@
             voters: [],
             candidates: [],
             officers: [],
-            verifying: null, // stores the ID of the user being verified
+            verifying: null,
             init() {
                 this.voters = {{ voters_json|safe }};
                 this.candidates = {{ candidates_json|safe }};
@@ -152,10 +152,8 @@
                         headers: { 'X-CSRFToken': this.getCsrfToken(), 'Content-Type': 'application/json' }
                     });
                     if (response.ok) {
-                        // Remove the voter from the list
                         this.voters = this.voters.filter(v => v.id !== userId);
                         this.showToast('Voter verified successfully!');
-                        // Optionally, also update the notification bell (the notification will be removed on next fetch)
                     } else {
                         const data = await response.json();
                         this.showToast(data.message || 'Verification failed', 'danger');
@@ -195,7 +193,6 @@
                 const toast = new bootstrap.Toast(toastEl, { autohide: true, delay: 3000 });
                 toast.show();
             },
-            // ----- MODIFIED: more reliable CSRF token extraction from cookie -----
             getCsrfToken() {
                 let cookieValue = null;
                 if (document.cookie && document.cookie !== '') {
@@ -210,7 +207,6 @@
                 }
                 return cookieValue;
             }
-            // --------------------------------------------------------------------
         };
     }
 </script>

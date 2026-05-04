@@ -1,8 +1,8 @@
-{% extends 'voting/base.html' %}
+{% extends 'voting/admin_base.html' %}
 {% load static %}
 
-{% block content %}
-<div class="container mt-4" x-data="resultsApp()" x-init="init()">
+{% block admin_content %}
+<div x-data="resultsApp()" x-init="init()">
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center flex-wrap mb-4">
         <div>
@@ -148,8 +148,6 @@
                 this.loading = true;
                 try {
                     // Load results from server (passed via context or fetch)
-                    // We'll read from the pre-rendered JSON in a script tag for speed.
-                    // For flexibility, we'll also support an API endpoint.
                     const resultsData = {{ results|safe }};
                     const electionName = "{{ election.name }}";
                     if (Object.keys(resultsData).length === 0) {

@@ -57,9 +57,9 @@
 </div>
 
 <style>
-    /* Modern card styles */
+    /* Force white background and black text – override any dark mode */
     .audit-card {
-        background: #ffffff;
+        background: #ffffff !important;
         border-radius: 20px;
         box-shadow: 0 8px 30px rgba(0,0,0,0.08);
         padding: 1.5rem;
@@ -79,7 +79,7 @@
     .audit-title {
         font-size: 1.6rem;
         font-weight: 600;
-        color: #0a58ca;
+        color: #0a58ca !important;
         margin: 0;
         position: relative;
     }
@@ -134,7 +134,7 @@
         background: #0f673f;
         transform: scale(1.02);
     }
-    /* Table styles */
+    /* Table styles – force black text */
     .table-responsive-wrapper {
         overflow-x: auto;
         border-radius: 16px;
@@ -144,35 +144,38 @@
         width: 100%;
         border-collapse: collapse;
         font-size: 0.9rem;
+        background: #ffffff !important;
     }
     .audit-table thead th {
-        background: #f8fafc;
+        background: #f8fafc !important;
         padding: 1rem;
         font-weight: 600;
-        color: #1e293b;
+        color: #000000 !important;
         border-bottom: 2px solid #e2e8f0;
         cursor: pointer;
         user-select: none;
         transition: background 0.2s;
     }
     .audit-table thead th:hover {
-        background: #eef2ff;
+        background: #eef2ff !important;
     }
     .audit-table tbody tr {
         transition: background 0.2s, transform 0.1s;
         animation: fadeIn 0.3s ease-out;
     }
     .audit-table tbody tr:hover {
-        background: #f1f5f9;
+        background: #f1f5f9 !important;
     }
     .audit-table td {
         padding: 0.9rem 1rem;
         border-bottom: 1px solid #edf2f7;
         vertical-align: middle;
+        color: #000000 !important;   /* Force black text */
+        background: #ffffff !important;
     }
     .badge-action {
-        background: #e9ecef;
-        color: #495057;
+        background: #e9ecef !important;
+        color: #000000 !important;
         padding: 0.3rem 0.7rem;
         border-radius: 30px;
         font-size: 0.8rem;
@@ -242,7 +245,7 @@
             border: 1px solid #e2e8f0;
             border-radius: 16px;
             padding: 0.5rem;
-            background: white;
+            background: #ffffff !important;
         }
         .audit-table tbody td {
             display: flex;
@@ -251,11 +254,13 @@
             padding: 0.6rem;
             border: none;
             border-bottom: 1px solid #f0f0f0;
+            color: #000000 !important;
+            background: #ffffff !important;
         }
         .audit-table tbody td:before {
             content: attr(data-label);
             font-weight: 600;
-            color: #0a58ca;
+            color: #0a58ca !important;
             margin-right: 1rem;
         }
         .audit-pagination {
@@ -271,7 +276,6 @@
 
 <script>
     (function() {
-        // Get table body and rows
         const tbody = document.getElementById('auditTableBody');
         let rows = Array.from(tbody.querySelectorAll('tr.audit-row'));
         let filteredRows = [...rows];
@@ -279,16 +283,12 @@
         let pageSize = 25;
         let currentSort = { column: null, direction: 'asc' };
 
-        // Helper functions
         function updateTableDisplay() {
-            // Paginate filteredRows
             const start = (currentPage - 1) * pageSize;
             const end = pageSize === -1 ? filteredRows.length : start + pageSize;
             const pageRows = filteredRows.slice(start, end);
-            // Clear tbody and append page rows
             tbody.innerHTML = '';
             pageRows.forEach(row => tbody.appendChild(row));
-            // Update pagination controls
             const totalPages = pageSize === -1 ? 1 : Math.ceil(filteredRows.length / pageSize);
             document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages || 1}`;
             const prevBtn = document.getElementById('prevPageBtn');
@@ -335,7 +335,6 @@
                 currentSort.column = column;
                 currentSort.direction = 'asc';
             }
-            // Update arrow icons
             document.querySelectorAll('#auditTable th i').forEach(icon => {
                 icon.className = 'bi bi-arrow-up-short';
             });
@@ -348,7 +347,6 @@
             sortRows(column, currentSort.direction);
         }
 
-        // Event listeners
         document.getElementById('searchInput').addEventListener('keyup', filterRows);
         document.getElementById('pageSizeSelect').addEventListener('change', (e) => {
             pageSize = parseInt(e.target.value);
@@ -369,7 +367,6 @@
                 updateTableDisplay();
             }
         });
-        // Sorting headers
         const headers = document.querySelectorAll('#auditTable th');
         headers.forEach(th => {
             const sortKey = th.getAttribute('data-sort');
@@ -377,7 +374,6 @@
                 th.addEventListener('click', () => handleSortClick(sortKey, th));
             }
         });
-        // Export CSV
         document.getElementById('exportCsvBtn').addEventListener('click', () => {
             const rowsToExport = filteredRows;
             const csvData = [['User', 'Action', 'IP Address', 'Timestamp']];
@@ -400,8 +396,6 @@
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
         });
-
-        // Initial display
         updateTableDisplay();
     })();
 </script>

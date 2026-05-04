@@ -1,8 +1,8 @@
-{% extends 'voting/base.html' %}
+{% extends 'voting/admin_base.html' %}
 {% load static %}
 
-{% block content %}
-<div class="container mt-4">
+{% block admin_content %}
+<div class="mt-4">
     <div class="card shadow-lg border-0 rounded-4">
         <div class="card-header bg-primary text-white rounded-top-4">
             <h3 class="mb-0"><i class="fas fa-chart-line me-2"></i>Historical Replay: {{ election.name }}</h3>
@@ -93,7 +93,6 @@
         const candidateIds = [...new Set(timeline.map(v => v.candidate))];
 
         // Fetch candidate details (names) – you can adjust the endpoint
-        // Option 1: use a separate API (recommended)
         let candidateNames = {};
         try {
             const candidatesResp = await fetch(`/election/${ {{ election.id }} }/candidates/json/`);

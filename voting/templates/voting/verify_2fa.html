@@ -1,0 +1,33 @@
+{% extends 'voting/base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card shadow border-0 animate__animated animate__fadeInUp">
+            <div class="card-header bg-primary text-white text-center">
+                <h4><i class="bi bi-shield-lock-fill me-2"></i> Two‑Factor Verification</h4>
+                <p class="mb-0 small">Enter the 6‑digit code from your authenticator app</p>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Authentication Code</label>
+                        <input type="text" name="token" class="form-control form-control-lg text-center" 
+                               placeholder="000000" maxlength="6" pattern="\d{6}" required autofocus>
+                        <div class="form-text">Code expires every 30 seconds. Verify your identity.</div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" name="remember_me" class="form-check-input" id="rememberMe">
+                        <label class="form-check-label" for="rememberMe">Remember this device (2 weeks)</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Verify & Login</button>
+                </form>
+            </div>
+            <div class="card-footer text-center bg-light">
+                <a href="{% url 'logout' %}">Cancel and go back</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
