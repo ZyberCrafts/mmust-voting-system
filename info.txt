@@ -1,0 +1,8 @@
+Hostname used by render = dpg-d7sc5fmgvqtc73c1bdug-a
+port = 5432
+Database = mmust_db_xvz5
+Username = mmust_user
+Password = f7XJgrhDFhFzi1fWRjWpQNgtnyaIQrQC
+Internal Database URL = postgresql://mmust_user:f7XJgrhDFhFzi1fWRjWpQNgtnyaIQrQC@dpg-d7sc5fmgvqtc73c1bdug-a/mmust_db_xvz5
+External Database URL = postgresql://mmust_user:f7XJgrhDFhFzi1fWRjWpQNgtnyaIQrQC@dpg-d7sc5fmgvqtc73c1bdug-a.oregon-postgres.render.com/mmust_db_xvz5
+PSQL Command = PGPASSWORD=f7XJgrhDFhFzi1fWRjWpQNgtnyaIQrQC psql -h dpg-d7sc5fmgvqtc73c1bdug-a.oregon-postgres.render.com -U mmust_user mmust_db_xvz5

@@ -18,8 +18,8 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    '.yourdomain.com',  # Change to your domain
     '.ngrok.io',
+    'mmust-online-voting.onrender.com',
 ]
 
 INSTALLED_APPS = [
@@ -212,6 +212,9 @@ else:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://mmust-online-voting.onrender.com',
+]
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # OpenAI
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
