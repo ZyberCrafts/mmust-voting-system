@@ -43,6 +43,7 @@ def get_client_ip(request):
         ip = request.META.get('REMOTE_ADDR')
     return ip
 
+
 def get_location_from_ip(ip):
     """Return (latitude, longitude) for given IP using ipapi.co."""
     try:
@@ -417,12 +418,26 @@ def vote_review(request):
     for pos in positions:
         cid = pending_vote.get(str(pos.id))
         if cid:
-            selected[pos] = get_object_or_404(Candidate, id=cid)
+            if cid < 0:  # negative ID = party ticket (President position)
+                # Fetch the party
+                party = get_object_or_404(Party, id=-cid)
+                selected[pos] = {'type': 'party', 'party': party, 'name': party.name}
+            else:
+                candidate = get_object_or_404(Candidate, id=cid)
+                selected[pos] = {'type': 'candidate', 'candidate': candidate}
 
     if request.method == 'POST':
         vote_str = json.dumps(pending_vote)
         public_key = get_election_public_key(election)
+        if not public_key:
+            messages.error(request, "Election encryption key missing. Please contact admin.")
+            return redirect('voting_ballot')
+
         encrypted = encrypt_vote(vote_str, public_key)
+        if not encrypted:
+            messages.error(request, "Failed to encrypt your vote. Please try again later.")
+            return redirect('voting_ballot')
+
         receipt = generate_receipt(encrypted, request.user.id)
         Vote.objects.create(election=election, encrypted_vote=encrypted, receipt_id=receipt)
 
@@ -448,10 +463,13 @@ def vote_review(request):
         voter_status.longitude = lon
         voter_status.save()
 
-        # WebSocket live update
+        # WebSocket live update (using utility)
         voted_count = VoterStatus.objects.filter(election=election, has_voted=True).count()
         total_voters = VoterStatus.objects.filter(election=election).count()
         turnout = (voted_count / total_voters * 100) if total_voters > 0 else 0
+
+        from .utils import get_live_candidate_counts
+        candidate_counts = get_live_candidate_counts(election)
 
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
@@ -461,7 +479,7 @@ def vote_review(request):
                 'data': {
                     'voted': voted_count,
                     'turnout': round(turnout, 2),
-                    'candidates': {},
+                    'candidates': candidate_counts   # now from utility
                 }
             }
         )
@@ -470,7 +488,7 @@ def vote_review(request):
         del request.session['pending_election_id']
         send_notification(request.user, "Vote Confirmation", f"Receipt: {receipt}", True, False)
         messages.success(request, "Your vote has been recorded.")
-        return redirect('feedback', election_id=election.id)   # redirect to feedback page
+        return redirect('feedback', election_id=election.id)
 
     return render(request, 'voting/review.html', {'selected': selected})
 
@@ -485,7 +503,7 @@ def feedback(request, election_id):
             feedback.election_id = election_id
             feedback.save()
 
-            # Send thank‑you email
+            # Send thank‑you email (optional)
             send_mail(
                 'Thank you for your feedback',
                 'Thank you for participating in the MMUST Voting System. Your feedback helps us improve.',
@@ -495,7 +513,8 @@ def feedback(request, election_id):
             )
 
             messages.success(request, "Thank you for your feedback!")
-            return redirect('dashboard')
+            # Redirect to the 'already_voted' page (shows live turnout)
+            return redirect('already_voted')
     else:
         form = FeedbackForm()
     return render(request, 'voting/feedback.html', {'form': form, 'election_id': election_id})
@@ -722,6 +741,48 @@ def admin_dashboard(request):
     active = get_active_election()
     votes_cast = VoterStatus.objects.filter(election=active, has_voted=True).count() if active else 0
     recent_logs = AuditLog.objects.all().order_by('-timestamp')[:5]
+
+    results_data = None
+    if active and active.is_closed():
+        try:
+            tally = TallyResult.objects.get(election=active)
+            raw_results = tally.results
+            
+            results_data = {}
+            for pos_id_str, cands in raw_results.items():
+                pos_id = int(pos_id_str)
+                position = Position.objects.get(id=pos_id)
+                # Build candidates list
+                candidates_list = []
+                winner = None
+                max_votes = -1
+                for cand_id, data in cands.items():
+                    candidates_list.append({
+                        'name': data['name'],
+                        'votes': data['votes'],
+                    })
+                    if data['votes'] > max_votes:
+                        max_votes = data['votes']
+                        winner = {'name': data['name'], 'votes': data['votes']}
+                results_data[pos_id] = {
+                    'name': position.name,
+                    'candidates': candidates_list,
+                    'winner': winner,
+                }
+        except TallyResult.DoesNotExist:
+            results_data = {}
+
+    feedback_stats = None
+    if active:
+        feedbacks = Feedback.objects.filter(election=active)
+        if feedbacks.exists():
+            avg_rating = feedbacks.aggregate(models.Avg('rating'))['rating__avg']
+            feedback_stats = {
+                'avg_rating': round(avg_rating, 1),
+                'total': feedbacks.count(),
+                'recent': feedbacks.order_by('-created_at')[:5],
+            }
+
     return render(request, 'voting/admin_dashboard.html', {
         'total_voters': total_voters,
         'total_candidates': total_candidates,
@@ -729,8 +790,9 @@ def admin_dashboard(request):
         'active_election': active,
         'votes_cast': votes_cast,
         'recent_logs': recent_logs,
+        'results': results_data,
+        'feedback_stats': feedback_stats,   # new
     })
-
 @login_required
 @admin_required
 def broadcast_notification(request):
@@ -1383,6 +1445,74 @@ def get_security_question(request):
             return JsonResponse({'error': 'User not found'}, status=404)
     return JsonResponse({'error': 'No username provided'}, status=400)
     
+def get_voter_status(request):
+    """Return (has_voted, election) for the current user."""
+    user = request.user
+    election = get_active_election()
+    has_voted = False
+    if election and user.is_authenticated:
+        try:
+            status = VoterStatus.objects.get(user=user, election=election)
+            has_voted = status.has_voted
+        except VoterStatus.DoesNotExist:
+            pass
+    return has_voted, election
+
+@login_required
+def vote_redirect(request):
+    """Redirect to ballot if not voted, else to 'already voted' page."""
+    has_voted, election = get_voter_status(request)
+    if not election:
+        messages.warning(request, "No active election.")
+        return redirect('dashboard')
+    if has_voted:
+        return redirect('already_voted')
+    else:
+        return redirect('voting_ballot')
+
+@login_required
+def already_voted(request):
+    """Page shown to users who have already voted."""
+    user = request.user
+    election = get_active_election()
+    if not election:
+        messages.warning(request, "No active election.")
+        return redirect('dashboard')
+    # Check if they actually voted (safety)
+    try:
+        status = VoterStatus.objects.get(user=user, election=election)
+        if not status.has_voted:
+            return redirect('voting_ballot')
+    except VoterStatus.DoesNotExist:
+        return redirect('voting_ballot')
+    
+    # Get live turnout data for the template
+    voted_count = VoterStatus.objects.filter(election=election, has_voted=True).count()
+    total_voters = User.objects.filter(role='voter', is_verified=True).count()
+    turnout = round((voted_count / total_voters) * 100, 1) if total_voters else 0
+
+    # Get user's feedback for this election (if any)
+    try:
+        user_feedback = Feedback.objects.get(user=user, election=election)
+        has_feedback = True
+        feedback_rating = user_feedback.rating
+        feedback_comment = user_feedback.comment
+    except Feedback.DoesNotExist:
+        has_feedback = False
+        feedback_rating = None
+        feedback_comment = None
+
+    context = {
+        'election': election,
+        'voted_count': voted_count,
+        'total_voters': total_voters,
+        'turnout': turnout,
+        'has_feedback': has_feedback,
+        'feedback_rating': feedback_rating,
+        'feedback_comment': feedback_comment,
+    }
+    return render(request, 'voting/already_voted.html', context)
+
 @login_required
 @admin_required
 def clear_broadcast_log(request):

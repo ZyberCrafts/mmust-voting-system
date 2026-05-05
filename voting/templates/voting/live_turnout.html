@@ -2,67 +2,25 @@
 
 {% block content %}
 <style>
-    .turnout-card {
-        transition: transform 0.3s, box-shadow 0.3s;
-        border: none;
-        border-radius: 20px;
-        background: rgba(255,255,255,0.95);
-        backdrop-filter: blur(2px);
-    }
-    .turnout-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    }
-    .counter {
-        font-size: 3rem;
-        font-weight: bold;
-        color: #2c3e50;
-        transition: all 0.2s ease;
-    }
-    .milestone {
-        animation: pulse 0.5s ease-out;
-    }
-    @keyframes pulse {
-        0% { transform: scale(1); background-color: #ffc107; }
-        50% { transform: scale(1.05); background-color: #ffc107; color: #000; }
-        100% { transform: scale(1); background-color: transparent; }
-    }
-    .chart-container {
-        max-width: 400px;
-        margin: 0 auto;
-    }
-    .last-update {
-        font-size: 0.85rem;
-        color: #6c757d;
-        margin-top: 1rem;
-    }
-    .confetti {
-        position: fixed;
-        width: 10px;
-        height: 10px;
-        background-color: #f0f0f0;
-        position: absolute;
-        animation: fall 3s linear forwards;
-        pointer-events: none;
-        z-index: 9999;
-    }
-    @keyframes fall {
-        to { transform: translateY(100vh) rotate(360deg); opacity: 0; }
-    }
-    @media (max-width: 768px) {
-        .counter { font-size: 2rem; }
-    }
+    .turnout-card { transition: transform 0.3s; border-radius: 20px; background: rgba(255,255,255,0.95); }
+    .turnout-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    .counter { font-size: 3rem; font-weight: bold; color: #2c3e50; }
+    .position-chart-card { margin-top: 2rem; }
+    .chart-container canvas { max-height: 300px; }
+    .last-update { font-size: 0.85rem; color: #6c757d; margin-top: 1rem; }
+    .candidate-legend { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 5px; }
 </style>
 
-<div x-data="liveTurnout()" x-init="initWebSocket()" class="container py-4">
-    <h2 class="text-center mb-4">Live Election Turnout – {{ election.name }}</h2>
-    
-    <div class="row g-4">
+<div x-data="liveTurnoutEnhanced()" x-init="initWebSocket()" class="container py-4">
+    <h2 class="text-center mb-4">Live Election Dashboard – {{ election.name }}</h2>
+
+    <!-- Turnout Cards -->
+    <div class="row g-4 mb-5">
         <div class="col-md-4">
             <div class="card turnout-card text-center shadow-sm">
                 <div class="card-body">
                     <h5 class="card-title text-muted">Votes Cast</h5>
-                    <div class="counter" x-text="formatNumber(votedCount)">0</div>
+                    <div class="counter" x-text="votedCount">0</div>
                     <p class="text-muted small">out of <span x-text="totalVoters"></span></p>
                 </div>
             </div>
@@ -86,23 +44,28 @@
         </div>
     </div>
 
-    <div class="chart-container mt-5">
-        <canvas id="turnoutChart" width="400" height="400"></canvas>
+    <!-- Turnout Donut Chart -->
+    <div class="row mb-5">
+        <div class="col-md-6 mx-auto">
+            <canvas id="turnoutChart" width="300" height="300"></canvas>
+        </div>
+    </div>
+
+    <!-- Per‑Position Bar Charts (dynamically generated) -->
+    <div id="positionChartsContainer" class="row g-4">
+        <!-- Charts will be inserted here by JavaScript -->
     </div>
 
     <div class="last-update text-center mt-3">
         Last update: <span x-text="lastUpdateTime"></span>
         <span x-show="!websocketConnected" class="badge bg-warning ms-2">Reconnecting...</span>
     </div>
-    <div class="text-center mt-2">
-        <small class="text-muted">This page updates automatically when votes are cast.</small>
-    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
     document.addEventListener('alpine:init', () => {
-        Alpine.data('liveTurnout', () => ({
+        Alpine.data('liveTurnoutEnhanced', () => ({
             electionId: {{ election.id }},
             totalVoters: {{ total_voters }},
             votedCount: 0,
@@ -110,54 +73,109 @@
             lastUpdateTime: '',
             websocketConnected: false,
             socket: null,
-            chart: null,
-            milestoneSent: {},
+            turnoutChart: null,
+            positionCharts: {},      // { positionId: Chart instance }
+            candidateColors: {},     // cache candidate colors
 
             initWebSocket() {
-                // Determine protocol (wss for https, ws for http)
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const url = `${protocol}//${window.location.host}/ws/live/${this.electionId}/`;
                 this.socket = new WebSocket(url);
-                
-                this.socket.onopen = () => {
-                    this.websocketConnected = true;
-                    console.log('WebSocket connected');
-                };
-                
+                this.socket.onopen = () => { this.websocketConnected = true; };
                 this.socket.onmessage = (event) => {
                     const data = JSON.parse(event.data);
-                    this.updateData(data.voted, data.turnout);
+                    this.updateData(data.voted, data.turnout, data.candidates);
                 };
-                
                 this.socket.onclose = () => {
                     this.websocketConnected = false;
-                    console.log('WebSocket disconnected, reconnecting...');
                     setTimeout(() => this.initWebSocket(), 3000);
                 };
-                
-                this.socket.onerror = (error) => {
-                    console.error('WebSocket error:', error);
-                };
             },
-            
-            updateData(voted, turnout) {
-                // Animate counter
+
+            updateData(voted, turnout, candidates) {
+                // Animate counters
                 this.animateCounter('votedCount', this.votedCount, voted);
                 this.animateCounter('turnoutPercent', this.turnoutPercent, turnout);
                 this.votedCount = voted;
                 this.turnoutPercent = turnout;
                 this.lastUpdateTime = new Date().toLocaleTimeString();
-                
-                // Update chart
-                if (this.chart) {
-                    this.chart.data.datasets[0].data = [voted, this.totalVoters - voted];
-                    this.chart.update();
+                // Update turnout chart
+                if (this.turnoutChart) {
+                    this.turnoutChart.data.datasets[0].data = [voted, this.totalVoters - voted];
+                    this.turnoutChart.update();
                 }
-                
-                // Check milestones and trigger confetti
-                this.checkMilestones(turnout);
+                // Update position charts
+                this.updatePositionCharts(candidates);
             },
-            
+
+            updatePositionCharts(candidates) {
+                // candidates: { positionId: { candidateId: voteCount, ... } }
+                for (let posId in candidates) {
+                    const posCandidates = candidates[posId];
+                    // Build labels and data arrays
+                    const labels = [];
+                    const counts = [];
+                    for (let candId in posCandidates) {
+                        // Get candidate name from existing DOM or prefetch
+                        const candName = this.getCandidateName(candId, posId);
+                        labels.push(candName);
+                        counts.push(posCandidates[candId]);
+                    }
+                    if (this.positionCharts[posId]) {
+                        this.positionCharts[posId].data.labels = labels;
+                        this.positionCharts[posId].data.datasets[0].data = counts;
+                        this.positionCharts[posId].update();
+                    } else {
+                        this.createPositionChart(posId, labels, counts);
+                    }
+                }
+            },
+
+            createPositionChart(posId, labels, counts) {
+                const container = document.getElementById('positionChartsContainer');
+                const col = document.createElement('div');
+                col.className = 'col-md-6 col-lg-4 mb-4';
+                col.innerHTML = `
+                    <div class="card h-100 shadow-sm position-chart-card">
+                        <div class="card-header bg-primary text-white">Position ${posId}</div>
+                        <div class="card-body">
+                            <canvas id="chart-${posId}" width="400" height="300"></canvas>
+                            <div id="legend-${posId}" class="mt-2 small"></div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(col);
+                const ctx = document.getElementById(`chart-${posId}`).getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: labels, datasets: [{ label: 'Votes', data: counts, backgroundColor: this.generateColors(labels.length) }] },
+                    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+                });
+                this.positionCharts[posId] = chart;
+                // Create legend
+                const legendDiv = document.getElementById(`legend-${posId}`);
+                if (legendDiv) {
+                    legendDiv.innerHTML = '';
+                    labels.forEach((label, idx) => {
+                        const color = chart.data.datasets[0].backgroundColor[idx];
+                        legendDiv.innerHTML += `<div><span class="candidate-legend" style="background:${color}"></span> ${label}</div>`;
+                    });
+                }
+            },
+
+            generateColors(count) {
+                const baseColors = ['#28a745', '#ffc107', '#17a2b8', '#dc3545', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c'];
+                const colors = [];
+                for (let i = 0; i < count; i++) colors.push(baseColors[i % baseColors.length]);
+                return colors;
+            },
+
+            getCandidateName(candId, posId) {
+                // You can preload candidate names via a separate API or store in data attribute.
+                // For simplicity, we'll make an AJAX call if needed – but better to send names in WebSocket message.
+                return `Candidate ${candId}`;
+            },
+
             animateCounter(property, start, end) {
                 if (start === end) return;
                 const duration = 800;
@@ -174,85 +192,24 @@
                     this[property] = Math.round(current);
                 }, stepTime);
             },
-            
-            checkMilestones(turnout) {
-                const thresholds = [25, 50, 75, 90];
-                for (let th of thresholds) {
-                    if (turnout >= th && !this.milestoneSent[th]) {
-                        this.milestoneSent[th] = true;
-                        this.triggerMilestone(th);
-                        this.triggerConfetti();
-                    }
-                }
-            },
-            
-            triggerMilestone(percent) {
-                const element = document.querySelector('.turnout-card');
-                element.classList.add('milestone');
-                setTimeout(() => element.classList.remove('milestone'), 500);
-                // Optional: send notification via backend? Could call an API.
-                // For now, just a visual effect.
-            },
-            
-            triggerConfetti() {
-                // Simple confetti effect
-                for (let i = 0; i < 100; i++) {
-                    const confetti = document.createElement('div');
-                    confetti.classList.add('confetti');
-                    confetti.style.left = Math.random() * window.innerWidth + 'px';
-                    confetti.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
-                    document.body.appendChild(confetti);
-                    setTimeout(() => confetti.remove(), 3000);
-                }
-            },
-            
-            formatNumber(num) {
-                return num.toLocaleString();
-            },
-            
-            initChart() {
+
+            initTurnoutChart() {
                 const ctx = document.getElementById('turnoutChart').getContext('2d');
-                this.chart = new Chart(ctx, {
+                this.turnoutChart = new Chart(ctx, {
                     type: 'doughnut',
-                    data: {
-                        labels: ['Voted', 'Not Voted'],
-                        datasets: [{
-                            data: [0, this.totalVoters],
-                            backgroundColor: ['#28a745', '#dc3545'],
-                            borderWidth: 0,
-                            hoverOffset: 10
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: { position: 'bottom' },
-                            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw} voters` } }
-                        },
-                        animation: { animateRotate: true, animateScale: true }
-                    }
+                    data: { labels: ['Voted', 'Not Voted'], datasets: [{ data: [0, this.totalVoters], backgroundColor: ['#28a745', '#dc3545'] }] },
+                    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom' } } }
                 });
             }
         }));
     });
-    
-    // After Alpine initializes, we need to manually create chart because Alpine might not have mounted yet
+
+    // Initialize turnout chart after Alpine
     window.addEventListener('DOMContentLoaded', () => {
-        if (window.Alpine && document.querySelector('[x-data]')) {
-            // Wait for Alpine to be ready
-            setTimeout(() => {
-                const app = document.querySelector('[x-data]').__x;
-                if (app && app.initChart) app.initChart();
-            }, 100);
-        } else {
-            // Fallback: create chart manually
-            const ctx = document.getElementById('turnoutChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: { labels: ['Voted', 'Not Voted'], datasets: [{ data: [0, {{ total_voters }}], backgroundColor: ['#28a745', '#dc3545'] }] }
-            });
-        }
+        setTimeout(() => {
+            const app = document.querySelector('[x-data]')?.__x;
+            if (app && app.initTurnoutChart) app.initTurnoutChart();
+        }, 500);
     });
 </script>
 {% endblock %}

@@ -33,7 +33,7 @@ class User(AbstractUser):
     )
 
     role = models.CharField(max_length=20, choices=ROLES, default='voter')
-    voter_id = models.CharField(max_length=30, unique=True, blank=True, db_index=True)
+    voter_id = models.CharField(max_length=50, unique=True, blank=True, db_index=True)
     phone = models.CharField(max_length=15, help_text=_("Mobile phone number for SMS notifications"))
     security_question = models.CharField(max_length=255, choices=SECURITY_QUESTIONS)
     security_answer = models.CharField(max_length=255)
@@ -313,7 +313,7 @@ class AuditLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
     action = models.CharField(max_length=255)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(blank=True)
+    user_agent = models.TextField(blank=True, null=True)  
     timestamp = models.DateTimeField(auto_now_add=True)
     details = models.JSONField(default=dict, blank=True)
 

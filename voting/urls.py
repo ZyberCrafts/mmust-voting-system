@@ -51,6 +51,8 @@ urlpatterns = [
     path('vote/', views.voting_ballot, name='voting_ballot'),
     path('vote/review/', views.vote_review, name='vote_review'),
     path('admin-panel/close-election/', views.close_election, name='close_election'),
+    path('vote/check/', views.vote_redirect, name='vote_check'),
+    path('vote/already/', views.already_voted, name='already_voted'),
     
     # ---------- Results ----------
     path('results/', views.results, name='results'),

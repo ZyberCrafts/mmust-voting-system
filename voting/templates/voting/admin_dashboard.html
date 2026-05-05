@@ -13,7 +13,7 @@
                     <span class="fw-semibold">Advanced system configuration</span>
                 </div>
                 <a href="/admin/" class="btn btn-primary">
-                    <i class="bi bi-box-arrow-up-right"></i> Open Django Admin Panel
+                    <i class="bi bi-box-arrow-up-right"></i> Open Advanced Admin Panel
                 </a>
             </div>
         </div>
@@ -87,6 +87,64 @@
     </div>
 </div>
 
+<!-- Final Results Section (only if election is closed) -->
+{% if active_election and active_election.is_closed %}
+<div class="card mt-4 mb-4">
+    <div class="card-header bg-primary text-white">Final Results – {{ active_election.name }}</div>
+    <div class="card-body">
+        <div class="row">
+            {% for position, data in results.items %}
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header bg-light">{{ position.name }}</div>
+                        <div class="card-body">
+                            <canvas id="winnerChart-{{ position.id }}" width="200" height="150" style="max-width:100%; height:auto;"></canvas>
+                            <div class="mt-2 small">Winner: <strong>{{ data.winner.name }}</strong> ({{ data.winner.votes }} votes)</div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Feedback Statistics Card (new) -->
+{% if feedback_stats %}
+<div class="card mt-4">
+    <div class="card-header bg-info text-white">
+        <i class="bi bi-star-fill"></i> Voter Feedback
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <h3>{{ feedback_stats.avg_rating }} / 5</h3>
+                <p>Average rating</p>
+            </div>
+            <div class="col-md-4">
+                <h3>{{ feedback_stats.total }}</h3>
+                <p>Total responses</p>
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-outline-info" data-bs-toggle="collapse" data-bs-target="#feedbackComments">View Recent Comments</button>
+            </div>
+        </div>
+        <div id="feedbackComments" class="collapse mt-3">
+            {% for fb in feedback_stats.recent %}
+                <div class="border-bottom pb-2 mb-2">
+                    <strong>{{ fb.user.get_full_name }}</strong> –
+                    {% for i in "12345"|make_list %}
+                        {% if forloop.counter <= fb.rating %}★{% else %}☆{% endif %}
+                    {% endfor %}
+                    <br>
+                    <small>{{ fb.comment|default:"No comment" }}</small>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Audit Logs Table (recent) -->
 <div class="card shadow-sm mb-4">
     <div class="card-header bg-white border-0 pt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -122,7 +180,7 @@
                         <td>{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="4" class="text-center text-muted">No recent logs</td></tr>
+                    <td><td colspan="4" class="text-center text-muted">No recent logs</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -257,5 +315,34 @@
         a.click();
         URL.revokeObjectURL(a.href);
     });
+
+    // Render bar charts for final results (if election closed)
+    {% if active_election and active_election.is_closed and results %}
+        const resultsData = {{ results|safe }};
+        for (const [posId, posData] of Object.entries(resultsData)) {
+            const canvas = document.getElementById(`winnerChart-${posId}`);
+            if (canvas) {
+                const candidates = posData.candidates || [];
+                if (candidates.length) {
+                    const labels = candidates.map(c => c.name);
+                    const votes = candidates.map(c => c.votes);
+                    new Chart(canvas.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{ label: 'Votes', data: votes, backgroundColor: '#0d6efd' }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                } else {
+                    canvas.parentElement.innerHTML = '<p class="text-muted">No data available</p>';
+                }
+            }
+        }
+    {% endif %}
 </script>
 {% endblock %}

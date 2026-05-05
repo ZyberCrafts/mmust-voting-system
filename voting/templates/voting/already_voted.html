@@ -1,0 +1,129 @@
+{% extends 'voting/base.html' %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="alert alert-success text-center animate__animated animate__fadeInDown">
+        <i class="bi bi-check-circle-fill fs-1"></i>
+        <h3>Thank you for voting!</h3>
+        <p>Your vote has been recorded securely. You will receive a confirmation email with your receipt.</p>
+        <p>You cannot vote again. Below is the live election dashboard.</p>
+    </div>
+
+    <!-- Reuse the live turnout chart (same as live_turnout.html) -->
+    <div x-data="liveTurnoutEmbedded()" x-init="initWebSocket()" class="mt-4">
+        <h4 class="text-center mb-3">Live Election Progress – {{ election.name }}</h4>
+        <div class="row g-4 mb-4">
+            <div class="col-md-4">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted">Votes Cast</h5>
+                        <div class="counter display-4 fw-bold text-primary" x-text="votedCount">{{ voted_count }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted">Turnout</h5>
+                        <div class="counter display-4 fw-bold text-success" x-text="turnoutPercent + '%'">{{ turnout }}%</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title text-muted">Total Voters</h5>
+                        <div class="display-4 fw-bold" x-text="totalVoters">{{ total_voters }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mx-auto">
+                <canvas id="turnoutChart" width="300" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback section (new) -->
+    {% if has_feedback %}
+    <div class="card mt-4 shadow-sm">
+        <div class="card-header bg-info text-white">
+            <i class="bi bi-chat-dots"></i> Your Feedback
+        </div>
+        <div class="card-body">
+            <p><strong>Rating:</strong> 
+                {% for i in "12345"|make_list %}
+                    {% if forloop.counter <= feedback_rating %}
+                        <i class="fas fa-star text-warning"></i>
+                    {% else %}
+                        <i class="far fa-star text-muted"></i>
+                    {% endif %}
+                {% endfor %}
+            </p>
+            {% if feedback_comment %}
+                <p><strong>Comment:</strong> {{ feedback_comment }}</p>
+            {% endif %}
+            <p class="text-muted small">Thank you for helping us improve!</p>
+        </div>
+    </div>
+    {% else %}
+    <div class="card mt-4 shadow-sm">
+        <div class="card-body text-center">
+            <i class="bi bi-chat-square-text fs-1 text-muted"></i>
+            <p>You haven't submitted feedback yet.</p>
+            <a href="{% url 'feedback' election.id %}" class="btn btn-outline-primary btn-sm">Give Feedback</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="text-center mt-4">
+        <a href="{% url 'results' %}" class="btn btn-outline-primary">View Final Results (when available)</a>
+        <a href="{% url 'dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('liveTurnoutEmbedded', () => ({
+            electionId: {{ election.id }},
+            totalVoters: {{ total_voters }},
+            votedCount: {{ voted_count }},
+            turnoutPercent: {{ turnout }},
+            websocketConnected: false,
+            socket: null,
+            chart: null,
+            initWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const url = `${protocol}//${window.location.host}/ws/live/${this.electionId}/`;
+                this.socket = new WebSocket(url);
+                this.socket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    this.votedCount = data.voted;
+                    this.turnoutPercent = data.turnout;
+                    if (this.chart) {
+                        this.chart.data.datasets[0].data = [data.voted, this.totalVoters - data.voted];
+                        this.chart.update();
+                    }
+                };
+                this.socket.onclose = () => setTimeout(() => this.initWebSocket(), 3000);
+            },
+            initTurnoutChart() {
+                const ctx = document.getElementById('turnoutChart').getContext('2d');
+                this.chart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { labels: ['Voted', 'Not Voted'], datasets: [{ data: [this.votedCount, this.totalVoters - this.votedCount], backgroundColor: ['#28a745', '#dc3545'] }] },
+                    options: { responsive: true, maintainAspectRatio: true }
+                });
+            }
+        }));
+    });
+    window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            const app = document.querySelector('[x-data]')?.__x;
+            if (app && app.initTurnoutChart) app.initTurnoutChart();
+        }, 300);
+    });
+</script>
+{% endblock %}
